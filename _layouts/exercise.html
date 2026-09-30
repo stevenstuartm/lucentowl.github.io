@@ -1,0 +1,62 @@
+---
+layout: default
+---
+{% comment %}
+  One exercise: a fictional scenario, a decision, options, and a collapsed analysis. The
+  analysis sits in a native <details> element in the content, so there is no script and
+  nothing is saved. Exercises embed their own figures inline. Learning path checkpoints
+  point to exercises; this layout never points back to a path.
+{% endcomment %}
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LearningResource",
+  "learningResourceType": "Exercise",
+  "name": "{{ page.title }}",
+  "description": "{{ page.description }}",
+  "author": {
+    "@type": "Person",
+    "name": "{{ site.author.name }}",
+    "url": "{{ site.url }}"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{{ page.url | absolute_url }}"
+  }
+}
+</script>
+
+<article class="exercise resource" data-pagefind-body data-pagefind-filter="type:Exercise" data-pagefind-meta="category:{{ page.category }}">
+    <header class="page-header-card">
+        <div class="resource-header">
+            <nav class="breadcrumb" data-pagefind-ignore>
+                <span>Exercise</span>
+                {% if page.category %}
+                <span class="separator">/</span>
+                <span class="category">{{ page.category }}</span>
+                {% endif %}
+            </nav>
+            <h1 class="resource-title" data-pagefind-meta="title">{{ page.title }}</h1>
+            {% if page.description %}<p class="exercise-lead">{{ page.description }}</p>{% endif %}
+            <div class="header-badges" data-pagefind-ignore>
+                <span class="exercise-badge">Exercise</span>
+                {% if page.last_updated %}
+                <p class="resource-meta">Last updated: <time datetime="{{ page.last_updated | date_to_xmlschema }}">{{ page.last_updated | date: "%B %d, %Y" }}</time></p>
+                {% endif %}
+                {% include related-links.html %}
+            </div>
+        </div>
+    </header>
+
+    <div class="resource-content exercise-content">
+        <p class="exercise-fiction" data-pagefind-ignore>The company and scenario are fictional. The exercise ends at the decision and doesn't report how any choice turned out.</p>
+
+        {{ content }}
+
+        <div class="guide-share" data-pagefind-ignore>
+            <p>Found this useful? Share it:</p>
+            {% include share-linkedin.html %}
+        </div>
+    </div>
+</article>

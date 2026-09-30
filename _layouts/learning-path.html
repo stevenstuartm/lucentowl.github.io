@@ -9,6 +9,7 @@ layout: default
   step. Run `python .pathcheck.py` to catch it before a build.
 {% endcomment %}
 {% assign all_docs = site.guides | concat: site.resources | concat: site.case_studies | concat: site.posts %}
+{% comment %} A checkpoint may name one exercise, practiced before the reader's own "try" task. {% endcomment %}
 
 {% include learning-path-stats.html path=page %}
 
@@ -99,6 +100,28 @@ layout: default
                 <p><strong>You can now</strong> {{ stage.checkpoint.can }}</p>
                 <p><strong>Try it.</strong> {{ stage.checkpoint.try }}</p>
             </aside>
+
+            {% if stage.checkpoint.exercise %}
+            {% assign exercise = site.exercises | where: "url", stage.checkpoint.exercise | first %}
+            {% if exercise %}
+            {% assign exercise_words = exercise.content | strip_html | number_of_words %}
+            {% assign exercise_minutes = exercise_words | divided_by: 200 %}
+            {% if exercise_minutes < 1 %}{% assign exercise_minutes = 1 %}{% endif %}
+            <a class="path-exercise" href="{{ exercise.url | relative_url }}" target="_blank" rel="noopener">
+                <span class="path-exercise-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.2" fill="currentColor"></circle></svg>
+                </span>
+                <div class="path-exercise-body">
+                    <span class="path-exercise-label" data-pagefind-ignore>Exercise · practice on a shared problem</span>
+                    <span class="path-exercise-title">{{ exercise.title }}</span>
+                    <span class="path-exercise-desc">{{ exercise.description }}</span>
+                    <span class="path-exercise-meta" data-pagefind-ignore>Decide, then check your reasoning against a worked analysis · {{ exercise_minutes }} min</span>
+                </div>
+            </a>
+            {% else %}
+            <p class="path-exercise path-exercise--missing">Missing exercise: <code>{{ stage.checkpoint.exercise }}</code></p>
+            {% endif %}
+            {% endif %}
             {% endif %}
         </section>
         {% endfor %}

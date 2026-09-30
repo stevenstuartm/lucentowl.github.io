@@ -86,7 +86,9 @@ The resource layout renders each figure in `section` mode: an `h2` anchored as `
 
 **The `figures:` list is the inventory, so the front matter around it isn't.** A composite's `description` states its scope, such as "the diagrams behind the WinUI 3 study guides: how a desktop app's markup, layout, controls, data, and threads fit together at run time". Its `tags` name the domain. Neither is extended when a figure is added. Each figure's own `title` and `summary` already describe it on the page, so a description that lists figures repeats them, grows with every addition, and turns a listing card into a paragraph. Sessions appending one clause per figure pushed several descriptions past 700 characters before this rule existed. See `description` and `tags` in the [resource guide](resource-guide.md).
 
-Every figure belongs to exactly one composite. `.figcheck.py` flags a figure that a guide embeds but no composite lists.
+Every figure belongs to exactly one composite or exercise. `.figcheck.py` flags a figure that a guide embeds but nothing owns.
+
+**Exercises own their figures the same way.** An exercise lists its figures under `figures:` and embeds each one inline in its body, like a composite with `figures_inline: true`. Exercise figures take the fictional world's prefix plus a topic (`rlc-` for Ridgeline claims). Choose each exercise figure's kind and level of detail by where it sits in the exercise: a context diagram of how the work happens today, with every actor, the component each one uses, and how the parts connect, then a context diagram of the system to be built with open questions dashed, a container or component view at the level the options differ on, and a dynamic view of the recommended option under the case that tests it.
 
 A composite whose body tells a story, such as a worked example, can place its figures itself: set `figures_inline: true`, embed each listed figure in the body with the include, and the layout skips the list at the bottom. The `figures:` list still records ownership.
 
@@ -103,7 +105,7 @@ This renders the full diagram in a bordered container with its kind badge, title
 - **Place the include after the paragraph that introduces the structure**, on its own line with a blank line before and after, starting at column 0.
 - **The prose still carries the argument.** Don't narrate the figure box by box. When prose refers to what the figure shows, use the labels the figure uses, not letters or names that exist only in the prose.
 - **Guides wrapped in `{% raw %}`** (see CLAUDE.md, Liquid and Code Samples) must close the raw block around each include and reopen it after.
-- **Guides never embed a fictional worked system's figures.** A mock company or system appears only in the worked example that introduces it, never unannounced in a guide or a general composite.
+- **Guides never embed a fictional worked system's figures.** A mock company or system appears only in its worked example or its exercises, never unannounced in a guide or a general composite.
 - **Blog posts never embed figures.** Posts are syndicated and link-free, and an embedded figure would not survive syndication.
 - **Embedding adds no link.** The guide reaches the composite through the composite's `related_guides`, the same as any resource, so the `related_*` rule is unchanged. List every guide that embeds a figure in its composite's `related_guides`.
 

@@ -1,7 +1,8 @@
 """Consistency check for the _figures collection.
 
-Reports figure ids that guides or resources reference but that do not exist, figures with
-missing front matter, figures no page uses, and where each figure is used. Run it after
+Reports figure ids that guides, resources, or exercises reference but that do not exist,
+figures with missing front matter, figures no page uses, and where each figure is used. A
+composite resource or an exercise owns the figures in its `figures:` list. Run it after
 adding, renaming, or embedding a figure:
 
     python .figcheck.py
@@ -40,15 +41,19 @@ def record(fid, where):
     else:
         problems.append(f"{where}: references unknown figure '{fid}'")
 
-for path in sorted(glob.glob("_guides/**/*.md", recursive=True) + glob.glob("_resources/*.md")):
+for path in sorted(glob.glob("_guides/**/*.md", recursive=True) + glob.glob("_resources/*.md")
+                   + glob.glob("_exercises/*.md")):
     text = open(path, encoding="utf-8").read()
+    is_exercise = path.replace(os.sep, "/").startswith("_exercises/")
     for fid in re.findall(r'\{%-?\s*include\s+figure\.html\s+id="([^"]+)"', text):
         record(fid, path)
     fm, _ = front_matter(path)
     block = re.search(r"^figures:\n((?:\s+-\s+.+\n)+)", fm + "\n", re.M)
     if block:
         for fid in re.findall(r"-\s+(\S+)", block.group(1)):
-            record(fid, path + " (composite)")
+            record(fid, path + (" (exercise)" if is_exercise else " (composite)"))
+        if is_exercise:
+            continue
         # A composite's description states scope; the figures list is the inventory.
         desc = re.search(r'^description:\s*"(.*)"\s*$', fm, re.M)
         if desc and len(desc.group(1)) > 250:
@@ -60,11 +65,11 @@ for path in sorted(glob.glob("_guides/**/*.md", recursive=True) + glob.glob("_re
                             "tag the domain, not each figure")
 
 for fid, where in uses.items():
-    composites = [w for w in where if w.endswith("(composite)")]
+    composites = [w for w in where if w.endswith("(composite)") or w.endswith("(exercise)")]
     if not where:
         problems.append(f"_figures/{fid}.html: not used by any guide or resource")
     elif not composites:
-        problems.append(f"_figures/{fid}.html: embedded but not in any composite resource")
+        problems.append(f"_figures/{fid}.html: embedded but not in any composite resource or exercise")
     print(f"{fid}: " + (", ".join(where) if where else "(unused)"))
 
 print()

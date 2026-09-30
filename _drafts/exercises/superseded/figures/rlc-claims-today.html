@@ -1,0 +1,118 @@
+---
+title: "Ridgeline Claims: How Claims Work Today"
+kind: context
+system: ridgeline
+summary: "Phoned-in claims typed into a third-party CRM and triaged by hand."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 570" role="img" aria-labelledby="rlc5-title rlc5-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rlc5-title">How claims work at Ridgeline Mutual today</title>
+<desc id="rlc5-desc">A policyholder with a claim phones the contact center. The agent types the call into a case using the CRM's own web screens. The CRM is third-party SaaS: agents, the claims supervisor who reads new cases and triages them by hand, and adjusters who work their assigned cases all use its screens in the browser with corporate single sign-on. Ridgeline has no access to the CRM's database. Other systems reach CRM data only through its REST API, which throttles at peak. The CRM can also call out with webhooks on case events, but nothing uses them today. Separately, the policyholder can use the team-built portal website, a React single-page app, to view policies and claim status, but not to report a claim. The website calls the team-built Portal API, which serves the website only, accepts only policyholder sign-ins, and reads claim status from the CRM's REST API with a five-minute cache.</desc>
+<style>
+.rlc5-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rlc5-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc5-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc5-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rlc5-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.rlc5-mod { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.rlc5-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc5-bus { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.rlc5-bar { fill: var(--color-primary, #1A5F8A); }
+.rlc5-bar-hi { fill: var(--color-accent, #A5486E); }
+.rlc5-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.rlc5-grid { stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.rlc5-sep { stroke: var(--color-border, #E2E8F0); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.rlc5-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc5-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.rlc5-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rlc5-tm { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.rlc5-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rlc5-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rlc5-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rlc5-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rlc5-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.rlc5-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc5-ax { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.rlc5-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc5-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.rlc5-ret { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.rlc5-slow { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.rlc5-idle { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.4; stroke-dasharray: 2 4; }
+.rlc5-t-idle { font-size: 13px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rlc5-idlebox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+</style>
+<defs>
+<marker id="rlc5-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rlc5-aq" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="rlc5-ar" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="rlc5-hd" x="24" y="36">TODAY &#183; A CLAIM IS A PHONE CALL, AND EVERYONE WORKS IN THE CRM</text>
+<rect class="rlc5-ext" x="24" y="70" width="180" height="64" rx="6"/>
+<text class="rlc5-t-ext" x="38" y="92">Policyholder</text>
+<text class="rlc5-k" x="38" y="108">[Person]</text>
+<text class="rlc5-s" x="38" y="126">has a claim to report</text>
+<rect class="rlc5-ext" x="280" y="70" width="220" height="64" rx="6"/>
+<text class="rlc5-t-ext" x="294" y="92">Contact center agent</text>
+<text class="rlc5-k" x="294" y="108">[Person]</text>
+<text class="rlc5-s" x="294" y="126">types the call into a case</text>
+<rect class="rlc5-ext" x="280" y="160" width="220" height="64" rx="6"/>
+<text class="rlc5-t-ext" x="294" y="182">Claims supervisor</text>
+<text class="rlc5-k" x="294" y="198">[Person]</text>
+<text class="rlc5-s" x="294" y="216">reads new cases, triages by hand</text>
+<rect class="rlc5-ext" x="280" y="250" width="220" height="64" rx="6"/>
+<text class="rlc5-t-ext" x="294" y="272">Adjusters</text>
+<text class="rlc5-k" x="294" y="288">[People]</text>
+<text class="rlc5-s" x="294" y="306">work their assigned cases</text>
+<text class="rlc5-k" x="280" y="350">all three use the CRM's own screens, with corporate SSO</text>
+<rect class="rlc5-bound" x="580" y="56" width="356" height="274" rx="8"/>
+<text class="rlc5-hd" x="596" y="78">CRM &#183; THIRD-PARTY SAAS</text>
+<rect class="rlc5-ext" x="600" y="90" width="316" height="54" rx="6"/>
+<text class="rlc5-t-ext" x="614" y="112">Agent screens</text>
+<text class="rlc5-k" x="614" y="128">[vendor web app, in the browser]</text>
+<rect class="rlc5-ext" x="600" y="160" width="150" height="70" rx="6"/>
+<text class="rlc5-t-ext" x="614" y="182">Case data</text>
+<text class="rlc5-k" x="614" y="198">[vendor database]</text>
+<text class="rlc5-s" x="614" y="216">no Ridgeline access</text>
+<rect class="rlc5-ext" x="766" y="160" width="150" height="154" rx="6"/>
+<text class="rlc5-t-ext" x="780" y="182">REST API</text>
+<text class="rlc5-k" x="780" y="198">[for other systems]</text>
+<text class="rlc5-s" x="780" y="216">throttles at peak</text>
+<rect class="rlc5-idlebox" x="600" y="244" width="150" height="70" rx="6"/>
+<text class="rlc5-t-idle" x="614" y="266">Webhooks</text>
+<text class="rlc5-k" x="614" y="282">[on case events]</text>
+<text class="rlc5-s" x="614" y="300">unused today</text>
+<path class="rlc5-flow" d="M 204,102 H 274" marker-end="url(#rlc5-a)"/>
+<text class="rlc5-el" x="212" y="94">phone</text>
+<path class="rlc5-flow" d="M 500,102 H 540"/>
+<path class="rlc5-flow" d="M 500,192 H 540"/>
+<path class="rlc5-flow" d="M 500,282 H 540"/>
+<path class="rlc5-flow" d="M 540,102 V 282"/>
+<path class="rlc5-flow" d="M 540,117 H 594" marker-end="url(#rlc5-a)"/>
+<path class="rlc5-flow" d="M 675,144 V 154" marker-end="url(#rlc5-a)"/>
+<line class="rlc5-sep" x1="24" y1="366" x2="936" y2="366"/>
+<text class="rlc5-hd" x="24" y="392">CHECKING A CLAIM ONLINE</text>
+<rect class="rlc5-box" x="24" y="420" width="200" height="86" rx="6"/>
+<text class="rlc5-t" x="38" y="442">Portal website</text>
+<text class="rlc5-k" x="38" y="458">[React SPA, team-built]</text>
+<text class="rlc5-s" x="38" y="476">view policies, claim status</text>
+<text class="rlc5-s" x="38" y="492">no way to report a claim</text>
+<rect class="rlc5-box" x="280" y="420" width="220" height="86" rx="6"/>
+<text class="rlc5-t" x="294" y="442">Portal API</text>
+<text class="rlc5-k" x="294" y="458">[ASP.NET Core, team-built]</text>
+<text class="rlc5-s" x="294" y="476">serves the website only</text>
+<text class="rlc5-s" x="294" y="492">policyholder sign-ins only</text>
+<path class="rlc5-flow" d="M 114,134 V 414" marker-end="url(#rlc5-a)"/>
+<text class="rlc5-el" x="122" y="280">browser</text>
+<path class="rlc5-flow" d="M 224,462 H 274" marker-end="url(#rlc5-a)"/>
+<path class="rlc5-flow" d="M 500,440 H 841 V 320" marker-end="url(#rlc5-a)"/>
+<text class="rlc5-el" x="520" y="432">reads claim status, cached 5 minutes</text>
+<path class="rlc5-flow" d="M 24,546 H 54"/>
+<text class="rlc5-el" x="62" y="550">used today</text>
+<path class="rlc5-idle" d="M 150,546 H 180"/>
+<text class="rlc5-el" x="188" y="550">exists, unused</text>
+<rect class="rlc5-box" x="300" y="538" width="30" height="16" rx="3"/>
+<text class="rlc5-el" x="338" y="550">built by the portal team</text>
+<rect class="rlc5-ext" x="510" y="538" width="30" height="16" rx="3"/>
+<text class="rlc5-el" x="548" y="550">someone else's</text>
+</g>
+</svg>

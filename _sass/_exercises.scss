@@ -1,0 +1,56 @@
+/* Exercises: a fictional scenario, a decision, and a collapsed analysis. No script, no saved state. */
+
+.exercise-lead {
+    margin: 0.5rem 0 0;
+    color: var(--color-text-light);
+    line-height: 1.55;
+}
+
+.exercise-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--color-secondary);
+}
+
+.exercise-fiction {
+    padding: 0.6rem var(--spacing-sm);
+    border-left: 3px solid var(--color-accent);
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    background: var(--color-card-bg);
+    color: var(--color-text-light);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.exercise-analysis {
+    margin: var(--spacing-md) 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--color-card-bg);
+
+    > summary {
+        cursor: pointer;
+        padding: 0.8rem var(--spacing-sm);
+        font-weight: 700;
+        color: var(--color-primary);
+        list-style-position: inside;
+    }
+
+    &[open] > summary {
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    > :not(summary) {
+        margin-left: var(--spacing-sm);
+        margin-right: var(--spacing-sm);
+    }
+
+    > :last-child {
+        margin-bottom: var(--spacing-sm);
+    }
+}
+

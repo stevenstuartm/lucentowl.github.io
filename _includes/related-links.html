@@ -5,8 +5,10 @@ Two directions, both resolved at build time — nothing here loads asynchronousl
 
   Reverse — a guide, post, or case study lists every resource whose front
             matter names it in related_guides / related_posts /
-            related_case_studies.
-  Forward — a resource lists the guides, case studies, and posts it declares.
+            related_case_studies, and every exercise that names it in
+            related_guides / related_case_studies.
+  Forward — a resource or exercise lists the guides, case studies, and posts
+            it declares.
 
 Adding a new linkable collection means adding it to `linkable_collections`,
 adding its clause to the reverse lookup, and adding a forward pill below.
@@ -21,15 +23,19 @@ adding its clause to the reverse lookup, and adding a forward pill below.
     {%- assign via_posts = site.resources | where_exp: "r", "r.related_posts contains page.url" -%}
     {%- assign linked_resources = via_guides | concat: via_case_studies | concat: via_posts -%}
     {%- include related-pill.html icon="🔖" noun="resource" docs=linked_resources show_type=true -%}
+    {%- assign exercises_via_guides = site.exercises | where_exp: "e", "e.related_guides contains page.url" -%}
+    {%- assign exercises_via_case_studies = site.exercises | where_exp: "e", "e.related_case_studies contains page.url" -%}
+    {%- assign linked_exercises = exercises_via_guides | concat: exercises_via_case_studies -%}
+    {%- include related-pill.html icon="🎯" noun="exercise" docs=linked_exercises -%}
 {%- endif -%}
 
-{%- if page.collection == "resources" -%}
+{%- if page.collection == "resources" or page.collection == "exercises" -%}
     {%- include related-pill.html icon="📘" noun="guide" urls=page.related_guides source=site.guides -%}
     {%- include related-pill.html icon="🧭" noun="case study" urls=page.related_case_studies source=site.case_studies -%}
     {%- include related-pill.html icon="✍️" noun="post" urls=page.related_posts source=site.posts -%}
 {%- endif -%}
 
-{%- if linked_resources.size > 0 or page.related_guides or page.related_case_studies or page.related_posts -%}
+{%- if linked_resources.size > 0 or linked_exercises.size > 0 or page.related_guides or page.related_case_studies or page.related_posts -%}
 <script>
 (function() {
     var pills = document.querySelectorAll('.related-pill');

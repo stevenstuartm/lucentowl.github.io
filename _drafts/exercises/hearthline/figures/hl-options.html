@@ -1,0 +1,133 @@
+---
+title: "Hearthline: Three Answers to the CTO"
+kind: container
+system: hearthline
+summary: "What each option changes in the app, its deployments, and the database."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 516" role="img" aria-labelledby="hl3-title hl3-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="hl3-title">Three answers to the CTO's question about splitting Hearthline's product</title>
+<desc id="hl3-desc">Three panels. A, process changes then measure: the app stays one release unit with its shared data layer, shipped daily after a merge queue, automated regression, flaky-test quarantine, reverting breaking changes instead of delaying the release, and backward-compatible migrations, and the Jobs table keeps four writers until two months of evidence decide its future. B, process changes and an owner for Jobs now: everything in A, plus a Jobs interface owned by the Dispatch module, with Jobs moved into Dispatch's own schema. C, split starting at the edge: Integrations becomes a separately released service next to the app, both still using the shared database with its shared tables unchanged, so there are two release cycles on one schema, and the other teams keep waiting unless A's changes happen too.</desc>
+<style>
+.hl3-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.hl3-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl3-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hl3-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.hl3-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.hl3-mod { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.hl3-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl3-bus { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.hl3-bar { fill: var(--color-primary, #1A5F8A); }
+.hl3-bar-hi { fill: var(--color-accent, #A5486E); }
+.hl3-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.hl3-grid { stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.hl3-sep { stroke: var(--color-border, #E2E8F0); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.hl3-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hl3-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.hl3-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.hl3-tm { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.hl3-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.hl3-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.hl3-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hl3-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.hl3-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.hl3-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hl3-ax { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.hl3-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hl3-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.hl3-ret { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.hl3-slow { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hl3-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hl3-ifc { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl3-seg1 { fill: var(--color-primary, #1A5F8A); }
+.hl3-seg2 { fill: var(--color-secondary, #2D5A85); opacity: 0.55; }
+.hl3-seg3 { fill: var(--color-accent, #A5486E); }
+.hl3-w { font-size: 11.5px; font-weight: 700; fill: #FFFFFF; }
+</style>
+<defs>
+<marker id="hl3-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="hl3-aq" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="hl3-ar" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="hl3-hd" x="24" y="30">THREE ANSWERS TO THE CTO: WHAT CHANGES IN EACH</text>
+<rect class="hl3-ext" x="20" y="46" width="296" height="420" rx="8"/>
+<text class="hl3-t-ext" x="34" y="70">A. Process changes, then measure</text>
+<text class="hl3-k" x="34" y="86">1 release unit, shipped daily</text>
+<rect class="hl3-ext" x="332" y="46" width="296" height="420" rx="8"/>
+<text class="hl3-t-ext" x="346" y="70">B. Process, and Jobs owned now</text>
+<text class="hl3-k" x="346" y="86">1 release unit, shipped daily</text>
+<rect class="hl3-ext" x="644" y="46" width="296" height="420" rx="8"/>
+<text class="hl3-t-ext" x="658" y="70">C. Split, starting at the edge</text>
+<text class="hl3-k" x="658" y="86">2 release units, then more</text>
+<rect class="hl3-dep" x="34" y="100" width="268" height="150" rx="8"/>
+<text class="hl3-k" x="44" y="116">The Hearthline app, as it is</text>
+<rect class="hl3-mod" x="42" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="67.0" y="147" text-anchor="middle">Booking</text>
+<rect class="hl3-mod" x="96" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="121.0" y="147" text-anchor="middle">Dispatch</text>
+<rect class="hl3-mod" x="150" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="175.0" y="147" text-anchor="middle">Mobile</text>
+<rect class="hl3-mod" x="204" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="229.0" y="147" text-anchor="middle">Invoicing</text>
+<rect class="hl3-mod" x="258" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="283.0" y="147" text-anchor="middle">Integr.</text>
+<rect class="hl3-ifc" x="42" y="170" width="252" height="26" rx="4"/>
+<text class="hl3-s" x="52" y="188">shared data layer, unchanged</text>
+<rect class="hl3-db" x="34" y="290" width="268" height="60" rx="10"/>
+<text class="hl3-t" x="46" y="312">Database</text>
+<text class="hl3-s" x="46" y="332">Jobs still has four writers</text>
+<path class="hl3-flow" d="M 168,250 V 284" marker-end="url(#hl3-a)"/>
+<text class="hl3-el" x="34" y="380">merge queue, automated regression, quarantine,</text>
+<text class="hl3-el" x="34" y="396">revert, safe migrations, daily deploys;</text>
+<text class="hl3-el" x="34" y="412">decide on Jobs after two months of evidence</text>
+<rect class="hl3-dep" x="346" y="100" width="268" height="150" rx="8"/>
+<text class="hl3-k" x="356" y="116">The Hearthline app, one boundary added</text>
+<rect class="hl3-mod" x="354" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="379.0" y="147" text-anchor="middle">Booking</text>
+<rect class="hl3-mod" x="408" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="433.0" y="147" text-anchor="middle">Dispatch</text>
+<rect class="hl3-mod" x="462" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="487.0" y="147" text-anchor="middle">Mobile</text>
+<rect class="hl3-mod" x="516" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="541.0" y="147" text-anchor="middle">Invoicing</text>
+<rect class="hl3-mod" x="570" y="128" width="50" height="30" rx="3"/>
+<text class="hl3-ax" x="595.0" y="147" text-anchor="middle">Integr.</text>
+<rect class="hl3-hot" x="354" y="170" width="252" height="30" rx="4"/>
+<text class="hl3-t-q" x="364" y="190">Jobs interface (Dispatch)</text>
+<rect class="hl3-db" x="346" y="290" width="268" height="60" rx="10"/>
+<text class="hl3-t" x="358" y="312">Database</text>
+<text class="hl3-s" x="358" y="332">Jobs in Dispatch's own schema</text>
+<path class="hl3-flow" d="M 480,250 V 284" marker-end="url(#hl3-a)"/>
+<text class="hl3-el" x="346" y="380">everything in A, plus an owner now</text>
+<text class="hl3-el" x="346" y="396">for the table behind most coupling</text>
+<rect class="hl3-dep" x="658" y="100" width="176" height="150" rx="8"/>
+<text class="hl3-k" x="668" y="116">The Hearthline app</text>
+<rect class="hl3-mod" x="666" y="128" width="78" height="30" rx="3"/>
+<text class="hl3-ax" x="705" y="147" text-anchor="middle">Booking</text>
+<rect class="hl3-mod" x="748" y="128" width="78" height="30" rx="3"/>
+<text class="hl3-ax" x="787" y="147" text-anchor="middle">Dispatch</text>
+<rect class="hl3-mod" x="666" y="164" width="78" height="30" rx="3"/>
+<text class="hl3-ax" x="705" y="183" text-anchor="middle">Mobile</text>
+<rect class="hl3-mod" x="748" y="164" width="78" height="30" rx="3"/>
+<text class="hl3-ax" x="787" y="183" text-anchor="middle">Invoicing</text>
+<rect class="hl3-dep" x="848" y="100" width="78" height="150" rx="8"/>
+<text class="hl3-k" x="856" y="116">service</text>
+<rect class="hl3-mod" x="854" y="128" width="66" height="30" rx="3"/>
+<text class="hl3-ax" x="887" y="147" text-anchor="middle">Integr.</text>
+<rect class="hl3-db" x="658" y="290" width="268" height="60" rx="10"/>
+<text class="hl3-t" x="670" y="312">Database, still shared</text>
+<text class="hl3-s" x="670" y="332">shared tables unchanged</text>
+<path class="hl3-flow" d="M 746,250 V 284" marker-end="url(#hl3-a)"/>
+<path class="hl3-flow" d="M 887,250 V 284" marker-end="url(#hl3-a)"/>
+<text class="hl3-el" x="658" y="380">two release cycles on one schema;</text>
+<text class="hl3-el" x="658" y="396">other teams wait unless A happens too</text>
+<rect class="hl3-dep" x="24" y="484" width="30" height="16" rx="4"/>
+<text class="hl3-el" x="62" y="496">a release unit</text>
+<rect class="hl3-mod" x="170" y="484" width="30" height="16" rx="3"/>
+<text class="hl3-el" x="208" y="496">a team's code</text>
+<rect class="hl3-hot" x="330" y="484" width="30" height="16" rx="3"/>
+<text class="hl3-el" x="368" y="496">the new boundary</text>
+<rect class="hl3-db" x="500" y="484" width="30" height="16" rx="6"/>
+<text class="hl3-el" x="538" y="496">the database</text>
+</g>
+</svg>

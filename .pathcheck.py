@@ -1,8 +1,9 @@
 """Consistency check for the _learning_paths collection.
 
-Resolves every step and "go deeper" URL to a content file, and checks each path against the
-authoring rules in .claude/content/learning-path-guide.md. Run it after adding or editing a
-path, and after moving or deleting any guide, resource, case study, or post:
+Resolves every step, "go deeper", and checkpoint exercise URL to a content file, and checks
+each path against the authoring rules in .claude/content/learning-path-guide.md. Every
+exercise must be named by at least one checkpoint. Run it after adding or editing a path or
+an exercise, and after moving or deleting any guide, resource, case study, or post:
 
     python .pathcheck.py
 
@@ -35,6 +36,8 @@ def content_urls():
         urls["/resources/" + os.path.basename(path)[:-3] + ".html"] = path
     for path in glob.glob("_case_studies/*.md"):
         urls["/case-studies/" + os.path.basename(path)[:-3] + ".html"] = path
+    for path in glob.glob("_exercises/*.md"):
+        urls["/exercises/" + os.path.basename(path)[:-3] + ".html"] = path
     for path in glob.glob("_posts/*.md"):
         m = re.match(r"(\d{4})-(\d{2})-(\d{2})-(.+)\.md$", os.path.basename(path))
         if m:
@@ -47,7 +50,7 @@ def content_urls():
     return urls
 
 urls = content_urls()
-problems, steps_by_path, ids = [], {}, set()
+problems, steps_by_path, ids, exercises_used = [], {}, set(), set()
 
 for path in sorted(glob.glob("_learning_paths/*.md")):
     pid = os.path.basename(path)[:-3]
@@ -80,6 +83,8 @@ for path in sorted(glob.glob("_learning_paths/*.md")):
             main.append(url)
             if url not in urls:
                 problems.append(f"{where}: step URL resolves to nothing: {url}")
+            elif url.startswith("/exercises/"):
+                problems.append(f"{where}: {url} is an exercise; name it in the checkpoint's 'exercise', not as a step")
             elif not url.startswith("/study-guides/"):
                 non_guide = True
             if not (step.get("why") or "").strip():
@@ -90,11 +95,19 @@ for path in sorted(glob.glob("_learning_paths/*.md")):
         checkpoint = stage.get("checkpoint") or {}
         if not (checkpoint.get("can") or "").strip() or not (checkpoint.get("try") or "").strip():
             problems.append(f"{where}: needs a checkpoint with 'can' and 'try'")
-        unknown = set(checkpoint) - {"can", "try", "exit"}
+        unknown = set(checkpoint) - {"can", "try", "exit", "exercise"}
         if unknown:
             problems.append(f"{where}: checkpoint has unknown keys {sorted(unknown)}")
         if "exit" in checkpoint and checkpoint["exit"] is not True:
             problems.append(f"{where}: checkpoint 'exit' is either true or left out")
+        exercise = checkpoint.get("exercise")
+        if exercise is not None:
+            if not isinstance(exercise, str) or not exercise.startswith("/exercises/"):
+                problems.append(f"{where}: checkpoint 'exercise' is one /exercises/ URL")
+            elif exercise not in urls:
+                problems.append(f"{where}: checkpoint exercise resolves to nothing: {exercise}")
+            else:
+                exercises_used.add(exercise)
         if checkpoint.get("exit") and i == len(stages):
             problems.append(f"{where}: the last stage is the end of the path, not an exit point")
         for url in stage.get("deeper") or []:
@@ -114,6 +127,10 @@ for path in sorted(glob.glob("_learning_paths/*.md")):
     prereq = front_matter(path).get("prerequisite")
     if prereq and prereq not in ids:
         problems.append(f"{path}: prerequisite '{prereq}' is not a path")
+
+for url, path in sorted(urls.items()):
+    if url.startswith("/exercises/") and url not in exercises_used:
+        problems.append(f"{path}: no learning path checkpoint names this exercise")
 
 pids = sorted(steps_by_path)
 for i, a in enumerate(pids):

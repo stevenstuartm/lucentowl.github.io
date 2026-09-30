@@ -53,6 +53,11 @@ collections:
   learning_paths:
     output: true
     permalink: /learning-paths/:path.html
+  # Exercises are practice on a shared, fictional problem. Each one belongs to a learning path
+  # checkpoint, and none has a listing page yet. See _drafts/exercises-plan.md.
+  exercises:
+    output: true
+    permalink: /exercises/:path.html
   # Figures are building blocks, never pages: composed into guides and resources
   # through _includes/figure.html. See .claude/content/figure-guide.md.
   figures:
@@ -87,6 +92,11 @@ defaults:
       type: "learning_paths"
     values:
       layout: "learning-path"
+  - scope:
+      path: ""
+      type: "exercises"
+    values:
+      layout: "exercise"
   - scope:
       path: ""
       type: "figures"

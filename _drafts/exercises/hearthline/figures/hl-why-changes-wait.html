@@ -1,0 +1,87 @@
+---
+title: "Hearthline: Why Changes Wait"
+kind: chart
+system: hearthline
+summary: "Where four working days from merge to production go, and why releases were delayed."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" role="img" aria-labelledby="hl2-title hl2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="hl2-title">Where Hearthline's four working days from merge to production go, and why releases were delayed</title>
+<desc id="hl2-desc">A stacked bar of the average four working days from merge to production: about 2 working days waiting for the Friday release cut, 2 for the Monday QA pass and the Tuesday deploy, and about a third of a day from delayed releases. Below, a bar chart of why 11 of 52 weekly releases were delayed last year: 5 flaky tests that passed on a rerun, 4 cases of one team's change breaking another team's tests, 3 of them through the Jobs table, and 2 migrations that failed their staging rehearsal.</desc>
+<style>
+.hl2-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.hl2-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl2-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hl2-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.hl2-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.hl2-mod { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.hl2-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl2-bus { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.hl2-bar { fill: var(--color-primary, #1A5F8A); }
+.hl2-bar-hi { fill: var(--color-accent, #A5486E); }
+.hl2-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.hl2-grid { stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.hl2-sep { stroke: var(--color-border, #E2E8F0); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.hl2-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hl2-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.hl2-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.hl2-tm { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.hl2-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.hl2-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.hl2-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hl2-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.hl2-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.hl2-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hl2-ax { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.hl2-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hl2-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.hl2-ret { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.hl2-slow { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hl2-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hl2-ifc { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hl2-seg1 { fill: var(--color-primary, #1A5F8A); }
+.hl2-seg2 { fill: var(--color-secondary, #2D5A85); opacity: 0.55; }
+.hl2-seg3 { fill: var(--color-accent, #A5486E); }
+.hl2-w { font-size: 11.5px; font-weight: 700; fill: #FFFFFF; }
+</style>
+<defs>
+<marker id="hl2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="hl2-aq" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="hl2-ar" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="hl2-hd" x="24" y="36">WHERE A CHANGE'S FOUR WORKING DAYS GO, ON AVERAGE</text>
+<rect class="hl2-seg1" x="24.0" y="56" width="360.0" height="46" rx="3"/>
+<text class="hl2-w" x="34.0" y="76">2 days</text>
+<text class="hl2-w" x="34.0" y="93">waiting for Friday</text>
+<rect class="hl2-seg2" x="384.0" y="56" width="360.0" height="46" rx="3"/>
+<text class="hl2-w" x="394.0" y="76">2 days</text>
+<text class="hl2-w" x="394.0" y="93">QA day and Tuesday deploy</text>
+<rect class="hl2-seg3" x="744.0" y="56" width="59.4" height="46" rx="3"/>
+<text class="hl2-el-q" x="813.4" y="76">delays: about</text>
+<text class="hl2-el-q" x="813.4" y="92">a third of a day</text>
+<line class="hl2-axis" x1="24" y1="106" x2="24" y2="112"/>
+<text class="hl2-ax" x="24" y="126" text-anchor="middle">0</text>
+<line class="hl2-axis" x1="204" y1="106" x2="204" y2="112"/>
+<text class="hl2-ax" x="204" y="126" text-anchor="middle">1</text>
+<line class="hl2-axis" x1="384" y1="106" x2="384" y2="112"/>
+<text class="hl2-ax" x="384" y="126" text-anchor="middle">2</text>
+<line class="hl2-axis" x1="564" y1="106" x2="564" y2="112"/>
+<text class="hl2-ax" x="564" y="126" text-anchor="middle">3</text>
+<line class="hl2-axis" x1="744" y1="106" x2="744" y2="112"/>
+<text class="hl2-ax" x="744" y="126" text-anchor="middle">4</text>
+<line class="hl2-axis" x1="924" y1="106" x2="924" y2="112"/>
+<text class="hl2-ax" x="924" y="126" text-anchor="middle">5</text>
+<text class="hl2-ax" x="474.0" y="142" text-anchor="middle">working days from merge to production</text>
+<text class="hl2-hd" x="24" y="200">WHY 11 OF 52 WEEKLY RELEASES WERE DELAYED LAST YEAR</text>
+<text class="hl2-el" x="24" y="244">Flaky tests that passed on rerun</text>
+<rect class="hl2-seg2" x="330" y="228" width="350" height="26" rx="3"/>
+<text class="hl2-n" x="690" y="246">5</text>
+<text class="hl2-el" x="24" y="294">One team's change broke another team's tests</text>
+<rect class="hl2-seg3" x="330" y="278" width="280" height="26" rx="3"/>
+<text class="hl2-n" x="620" y="296">4</text>
+<text class="hl2-el" x="24" y="344">A migration failed its staging rehearsal</text>
+<rect class="hl2-seg2" x="330" y="328" width="140" height="26" rx="3"/>
+<text class="hl2-n" x="480" y="346">2</text>
+<text class="hl2-el-q" x="640" y="296">3 of them through Jobs</text>
+</g>
+</svg>

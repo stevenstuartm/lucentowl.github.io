@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | --- | --- |
 | [`writing-standards.md`](.claude/skills/refine-prose/writing-standards.md) | **Always** — universal linter rules, voice, flow, punctuation, bullet point usage |
 | [`blog-post-guide.md`](.claude/content/blog-post-guide.md) | Writing or editing blog posts, creating social media summaries |
+| [`authority-bounds.md`](.claude/content/authority-bounds.md) | Choosing blog post subjects — what the site can firmly support (research first, experience as seasoning), growth edges, committed positions, owned frameworks |
+| [`post-idea-rubric.md`](.claude/content/post-idea-rubric.md) | Scoring or ranking post ideas — idea format, criteria, the retry-policy benchmark, placement rules, calibration log. Used by `/post-ideas` |
 | [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, the new-guide workflow (scope gate, independent subagent review, definition of done), and the Quality Checklist shared with refinement |
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
@@ -21,15 +23,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Content pipeline
 
-Blog post drafts move through three stages, in order. Each assumes the previous one is done.
+Blog post drafts move through two stages, in order. Before them, `/post-ideas` feeds the pipeline: its **research** job generates and scores ideas, its **rank** job re-scores them, its **draft** job writes an approved idea into `_drafts/<id>.md` and runs up to three `/review-publishable` rounds unattended, and ideas move backlog → in review → approved → drafted across `_drafts/post-ideas/`. Scoring rules and the author's calibration log live in [`post-idea-rubric.md`](.claude/content/post-idea-rubric.md).
 
 | Stage | Command | Operates on | Output |
 | --- | --- | --- | --- |
-| Shape | `/shape-post-draft` | Raw or half-formed drafts | Restructures the draft, marks new argument `PROPOSED`, plus a plan doc |
-| Refine | `/refine-prose` | A draft whose argument has settled | Lints to clean, then narrative self-review |
+| Ideas | `/post-ideas` | Research questions, not drafts | Scored ideas in the backlog, review, and approved lists |
+| Refine | `/refine-prose` | Any draft | Lints to clean, then narrative self-review |
 | Review | `/review-publishable` | A draft ready for final scrutiny | Full report, then a resolution pass that applies every finding to the file |
-
-`/shape-post-draft` is a **gate**. A draft should not reach `/refine-prose` until its argument has stopped moving, because polishing prose on an argument that is about to be restructured is wasted work, and polished prose disguises structural defects. Skip it only for drafts that already know what they argue. A draft it has touched is not ready for `/refine-prose` until every `PROPOSED` marker in it is resolved.
 
 `/refine-prose` lints to a clean state and does a narrative self-review the linter can't do. The skill and its bundled linter script live in `.claude/skills/refine-prose/`.
 
@@ -90,6 +90,7 @@ To upgrade, change the pin deliberately, run `bundle update <gem>` or `bundle lo
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
 - **_learning_paths/**: Learning paths, one file per path, all data in front matter (see Learning Paths)
+- **_exercises/**: Exercises, one decision each on a fictional scenario, reached from learning path checkpoints (see Exercises)
 - **_figures/**: Diagram building blocks (`output: false`, no pages of their own), composed into guides and composite resources by `_includes/figure.html`
 - **_site/**: Generated static site (excluded from git)
 - **pages/**: Site pages (blog, about, tech-radar, study-guides, authors/)
@@ -246,7 +247,18 @@ Ordered routes through existing content toward a goal, at `/learning-paths.html`
 - **Paths are isolated.** A path points to pages; no page points back. Never add path links, "part of this path" notes, or path-aware navigation to guide, resource, case study, or post layouts or content.
 - **Moving or deleting content means running `python .pathcheck.py`.** It resolves every step URL and checks the authoring rules. A step that doesn't resolve also renders as a visible "Missing step".
 - **No reader state.** The path page is the navigation, and its step links open in a new tab so it stays open while the reader wanders. Step anchors (`#step-7`) and the browser's own `:visited` color are the only "progress", and the site stores nothing.
-- The design history and the candidate path catalogue are in `_drafts/learning-paths-plan.md`.
+
+## Exercises
+
+Practice on a shared, fictional problem: a situation, a decision, options, and a worked analysis collapsed in a native `<details>` element. Design, rules, and pilot notes are in `_drafts/exercises-plan.md`. The fictional companies' canon is `.claude/content/exercise-worlds.md`, so read it before writing an exercise and add every new fact after.
+
+- **Status: paused.** No exercise is published or in a learning path yet. Drafts live in `_drafts/exercises/`, and the infrastructure below is in place for when one is ready.
+- **Files:** `_exercises/<id>.md`, `_layouts/exercise.html`, `_sass/_exercises.scss`. Permalink `/exercises/<id>.html`.
+- **Path-first, no catalog.** A learning path checkpoint names the exercise (`checkpoint.exercise`). `.pathcheck.py` fails on an exercise no checkpoint names, and on an exercise used as a step. There is no listing page or menu entry until the set is large enough to browse.
+- **Published and searchable.** Pagefind type `Exercise`. The exercise declares `related_guides` / `related_case_studies`, and those pages show a "related exercise" pill (`_includes/related-links.html`). The exercise never mentions a path.
+- **Every exercise has figures,** owned through its `figures:` list and embedded inline. See the figure guide.
+- **Self-contained.** No links or references to other content in the body, not even a world's worked example, and no canon labels such as ADR numbers. State the rule itself. Further reading is only the header's related pills.
+- **The answer is conditional.** Every rejected option gets the realistic change that would make it win, and an exercise never reports an outcome.
 
 ## What's New Stack
 

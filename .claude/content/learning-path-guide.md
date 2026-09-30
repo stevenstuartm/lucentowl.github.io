@@ -67,6 +67,7 @@ stages:
       can: "tell an architectural decision from a design one, ..."   # follows "You can now"
       try: "Pick a system you work on. List its top three ..."       # one task on the reader's own work
       exit: true              # optional; stopping here leaves a complete skill
+      exercise: /exercises/ridgeline-claims-shape.html   # optional; one exercise, practiced before `try`
 ---
 ```
 
@@ -97,6 +98,7 @@ Every stage ends with a checkpoint. It tells the reader what the stage gave them
 - **`try` is one task on the reader's own work.** It should take under an hour and produce something they can look at: a sketch, a list, a paragraph, an ADR, a deployed piece. Aim it at "a system you work on" or "an application you know", so a reader without the perfect project can still do it. Point at a template or resource from the stage when one fits. Later tasks may build on earlier ones ("the characteristics you listed in stage 1").
 - **A checkpoint is practice, not teaching.** It never explains a concept or summarizes a step. If a task needs an explanation to be doable, the explanation belongs in a guide.
 - **`exit: true` marks a stage where stopping still leaves the reader with a complete, usable skill.** The page labels it "a good place to stop". Use it so a long path reads as several finishable pieces, typically one or two per path. Never on the last stage, which is the end anyway.
+- **`exercise` names one exercise** for readers to practice on before the `try` task. The page shows it as its own card below the checkpoint, with the exercise's title and description, so readers see it as something to do rather than a link in passing. An exercise gives every reader the same problem and a worked analysis, so a reader without a suitable system of their own still has something to do. It's never a step, so it doesn't count toward a path's step limit. Every exercise must be named by at least one checkpoint. Exercises are drafted and published by the rules in `_drafts/exercises-plan.md`.
 - **Nothing is tracked.** Checkpoints are static text. There are no checkboxes, answers, or saved progress.
 
 ## Validation
@@ -105,7 +107,7 @@ Every stage ends with a checkpoint. It tells the reader what the stage gave them
 python .pathcheck.py
 ```
 
-It resolves every step and `deeper` URL to a content file and checks required fields, a checkpoint on every stage, that levels start at Foundations and only climb, step and stage counts, duplicate URLs, the non-guide rule, `prerequisite` targets, and pairwise overlap. A URL that doesn't resolve also renders as a visible "Missing step" on the path page.
+It resolves every step, `deeper`, and checkpoint `exercise` URL to a content file, fails on an exercise no checkpoint names and checks required fields, a checkpoint on every stage, that levels start at Foundations and only climb, step and stage counts, duplicate URLs, the non-guide rule, `prerequisite` targets, and pairwise overlap. A URL that doesn't resolve also renders as a visible "Missing step" on the path page.
 
 **Run it after moving, renaming, or deleting any guide, resource, case study, or post.** A path that still names the old URL is broken, and nothing else catches that.
 

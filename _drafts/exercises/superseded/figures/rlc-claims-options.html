@@ -1,0 +1,146 @@
+---
+title: "Ridgeline Claims: Four Options"
+kind: container
+system: ridgeline
+summary: "Where each option draws deployment boundaries around the four jobs."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" role="img" aria-labelledby="rlc3-title rlc3-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rlc3-title">Four ways to deploy Ridgeline Mutual's claims system</title>
+<desc id="rlc3-desc">Four panels show the same four jobs, intake, triage, handoff and notify, grouped into deployments. A, extend the portal, puts all four jobs inside the existing Portal API next to the portal's own code, with claims tables in the Portal DB. That means the CRM's webhook becomes the first caller the policyholder-only Portal API accepts that isn't a policyholder. B, a modular monolith, puts all four jobs as modules in one new claims app on App Service with one Claims DB holding a schema per module. Intake saves and returns and the rest follows. C, split out intake, has an Intake service that writes to a Service Bus queue, read by a claims app holding triage, handoff and notify, which owns the Claims DB, and the queue is the first broker the team has run. D, coarse services, deploys each job as its own service with its own pipeline, all four sharing one Claims DB.</desc>
+<style>
+.rlc3-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rlc3-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc3-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc3-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rlc3-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.rlc3-mod { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.rlc3-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc3-bus { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.rlc3-bar { fill: var(--color-primary, #1A5F8A); }
+.rlc3-bar-hi { fill: var(--color-accent, #A5486E); }
+.rlc3-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.rlc3-grid { stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.rlc3-sep { stroke: var(--color-border, #E2E8F0); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.rlc3-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc3-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.rlc3-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rlc3-tm { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.rlc3-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rlc3-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rlc3-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rlc3-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rlc3-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.rlc3-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc3-ax { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.rlc3-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc3-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.rlc3-ret { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.rlc3-slow { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+</style>
+<defs>
+<marker id="rlc3-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rlc3-aq" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="rlc3-ar" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="rlc3-hd" x="24" y="30">THE SAME FOUR JOBS, FOUR WAYS TO DEPLOY THEM</text>
+<rect class="rlc3-ext" x="20" y="50" width="440" height="270" rx="8"/>
+<text class="rlc3-t-ext" x="36" y="74">A. Extend the portal</text>
+<text class="rlc3-k" x="36" y="90">1 deployment, shared with the portal</text>
+<rect class="rlc3-dep" x="36" y="106" width="408" height="84" rx="8"/>
+<text class="rlc3-k" x="46" y="122">Portal API [App Service, existing]</text>
+<rect class="rlc3-mod" x="46" y="134" width="72" height="34" rx="4"/>
+<text class="rlc3-tm" x="56" y="156">Portal</text>
+<rect class="rlc3-mod" x="125" y="134" width="72" height="34" rx="4"/>
+<text class="rlc3-tm" x="135" y="156">Intake</text>
+<rect class="rlc3-mod" x="204" y="134" width="72" height="34" rx="4"/>
+<text class="rlc3-tm" x="214" y="156">Triage</text>
+<rect class="rlc3-mod" x="283" y="134" width="72" height="34" rx="4"/>
+<text class="rlc3-tm" x="293" y="156">Handoff</text>
+<rect class="rlc3-mod" x="362" y="134" width="72" height="34" rx="4"/>
+<text class="rlc3-tm" x="372" y="156">Notify</text>
+<path class="rlc3-flow" d="M 240,190 L 240,232" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-db" x="140" y="238" width="200" height="46" rx="10"/>
+<text class="rlc3-t" x="152" y="258">Portal DB</text>
+<text class="rlc3-k" x="152" y="274">+ claims tables</text>
+<text class="rlc3-el-q" x="36" y="306">a CRM webhook in a policyholder-only API</text>
+<rect class="rlc3-ext" x="500" y="50" width="440" height="270" rx="8"/>
+<text class="rlc3-t-ext" x="516" y="74">B. A modular monolith</text>
+<text class="rlc3-k" x="516" y="90">1 new deployment, 4 modules</text>
+<rect class="rlc3-dep" x="516" y="106" width="408" height="84" rx="8"/>
+<text class="rlc3-k" x="526" y="122">Claims app [App Service, new]</text>
+<rect class="rlc3-mod" x="530" y="134" width="88" height="34" rx="4"/>
+<text class="rlc3-tm" x="540" y="156">Intake</text>
+<rect class="rlc3-mod" x="628" y="134" width="88" height="34" rx="4"/>
+<text class="rlc3-tm" x="638" y="156">Triage</text>
+<rect class="rlc3-mod" x="726" y="134" width="88" height="34" rx="4"/>
+<text class="rlc3-tm" x="736" y="156">Handoff</text>
+<rect class="rlc3-mod" x="824" y="134" width="88" height="34" rx="4"/>
+<text class="rlc3-tm" x="834" y="156">Notify</text>
+<path class="rlc3-flow" d="M 720,190 L 720,232" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-db" x="620" y="238" width="200" height="46" rx="10"/>
+<text class="rlc3-t" x="632" y="258">Claims DB</text>
+<text class="rlc3-k" x="632" y="274">one schema per module</text>
+<text class="rlc3-s" x="516" y="306">intake saves and returns, the rest follows</text>
+<rect class="rlc3-ext" x="20" y="340" width="440" height="270" rx="8"/>
+<text class="rlc3-t-ext" x="36" y="364">C. Split out intake</text>
+<text class="rlc3-k" x="36" y="380">2 new deployments and a queue</text>
+<rect class="rlc3-dep" x="36" y="396" width="104" height="84" rx="8"/>
+<text class="rlc3-k" x="46" y="412">Intake service</text>
+<rect class="rlc3-mod" x="46" y="424" width="84" height="34" rx="4"/>
+<text class="rlc3-tm" x="56" y="446">Intake</text>
+<rect class="rlc3-bus" x="148" y="418" width="94" height="40" rx="12"/>
+<text class="rlc3-t-q" x="158" y="436">Queue</text>
+<text class="rlc3-k" x="158" y="450">[Service Bus]</text>
+<path class="rlc3-open" d="M 140,438 L 144,438" marker-end="url(#rlc3-aq)"/>
+<rect class="rlc3-dep" x="250" y="396" width="196" height="84" rx="8"/>
+<text class="rlc3-k" x="260" y="412">Claims app</text>
+<rect class="rlc3-mod" x="256" y="424" width="58" height="34" rx="4"/>
+<text class="rlc3-tm" x="266" y="446">Triage</text>
+<rect class="rlc3-mod" x="318" y="424" width="66" height="34" rx="4"/>
+<text class="rlc3-tm" x="328" y="446">Handoff</text>
+<rect class="rlc3-mod" x="388" y="424" width="52" height="34" rx="4"/>
+<text class="rlc3-tm" x="398" y="446">Notify</text>
+<path class="rlc3-open" d="M 242,438 L 246,438" marker-end="url(#rlc3-aq)"/>
+<path class="rlc3-flow" d="M 353,480 L 353,522" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-db" x="253" y="528" width="200" height="46" rx="10"/>
+<text class="rlc3-t" x="265" y="548">Claims DB</text>
+<text class="rlc3-k" x="265" y="564">owned by the claims app</text>
+<text class="rlc3-el-q" x="36" y="596">first broker the team has run</text>
+<rect class="rlc3-ext" x="500" y="340" width="440" height="270" rx="8"/>
+<text class="rlc3-t-ext" x="516" y="364">D. Coarse services</text>
+<text class="rlc3-k" x="516" y="380">4 new deployments, 4 pipelines</text>
+<rect class="rlc3-dep" x="516" y="396" width="96" height="84" rx="8"/>
+<text class="rlc3-k" x="526" y="412">service</text>
+<rect class="rlc3-mod" x="522" y="424" width="84" height="34" rx="4"/>
+<text class="rlc3-tm" x="532" y="446">Intake</text>
+<path class="rlc3-flow" d="M 564,480 L 660.0,522" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-dep" x="620" y="396" width="96" height="84" rx="8"/>
+<text class="rlc3-k" x="630" y="412">service</text>
+<rect class="rlc3-mod" x="626" y="424" width="84" height="34" rx="4"/>
+<text class="rlc3-tm" x="636" y="446">Triage</text>
+<path class="rlc3-flow" d="M 668,480 L 700.0,522" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-dep" x="724" y="396" width="96" height="84" rx="8"/>
+<text class="rlc3-k" x="734" y="412">service</text>
+<rect class="rlc3-mod" x="730" y="424" width="84" height="34" rx="4"/>
+<text class="rlc3-tm" x="740" y="446">Handoff</text>
+<path class="rlc3-flow" d="M 772,480 L 740.0,522" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-dep" x="828" y="396" width="96" height="84" rx="8"/>
+<text class="rlc3-k" x="838" y="412">service</text>
+<rect class="rlc3-mod" x="834" y="424" width="84" height="34" rx="4"/>
+<text class="rlc3-tm" x="844" y="446">Notify</text>
+<path class="rlc3-flow" d="M 876,480 L 780.0,522" marker-end="url(#rlc3-a)"/>
+<rect class="rlc3-db" x="620" y="528" width="200" height="46" rx="10"/>
+<text class="rlc3-t" x="632" y="548">Claims DB</text>
+<text class="rlc3-k" x="632" y="564">shared by all four</text>
+<text class="rlc3-s" x="516" y="596">separate releases, one shared schema</text>
+<rect class="rlc3-dep" x="24" y="624" width="30" height="16" rx="4"/>
+<text class="rlc3-el" x="62" y="636">a deployment</text>
+<rect class="rlc3-mod" x="164" y="624" width="30" height="16" rx="3"/>
+<text class="rlc3-el" x="202" y="636">a job, as code inside it</text>
+<rect class="rlc3-db" x="360" y="624" width="30" height="16" rx="6"/>
+<text class="rlc3-el" x="398" y="636">a database</text>
+<path class="rlc3-open" d="M 494,632 H 524"/>
+<text class="rlc3-el" x="532" y="636">through the queue</text>
+</g>
+</svg>

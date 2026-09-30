@@ -1,0 +1,121 @@
+---
+title: "Ridgeline Claims: What the New System Connects"
+kind: context
+system: ridgeline
+summary: "The claims system to build, its two ways in, and what it calls."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 590" role="img" aria-labelledby="rlc1-title rlc1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rlc1-title">The claims system Ridgeline Mutual will build, before its architecture style is chosen</title>
+<desc id="rlc1-desc">The claims system is one undecided box holding four jobs: intake of a website report or a CRM webhook, triage for severity and queue, handoff of the case to the CRM, and notification by email or text. It handles about 30 claims a day and took 4,800 in 72 hours after last June's storm. Claims arrive two ways. Policyholders report claims with photos through a new form on the existing, team-built portal website and API, which accepts only policyholder sign-ins through the customer identity service. Whether the claims work is part of the portal or its own system is the open question. Contact center agents keep taking phoned-in claims in the CRM's own screens, on a new structured claim form configured without code, and the CRM sends a webhook when an agent saves a claim. The claims system creates the CRM case for a website report, or writes severity and queue onto the agent's case, through the CRM's REST API, which throttles at peak, and notifies the policyholder through an email and text delivery service.</desc>
+<style>
+.rlc1-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rlc1-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc1-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc1-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rlc1-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.rlc1-mod { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.rlc1-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rlc1-bus { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.rlc1-bar { fill: var(--color-primary, #1A5F8A); }
+.rlc1-bar-hi { fill: var(--color-accent, #A5486E); }
+.rlc1-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.rlc1-grid { stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.rlc1-sep { stroke: var(--color-border, #E2E8F0); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.rlc1-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc1-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.rlc1-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rlc1-tm { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.rlc1-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rlc1-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rlc1-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rlc1-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rlc1-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.rlc1-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rlc1-ax { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.rlc1-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rlc1-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.rlc1-ret { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.rlc1-slow { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.rlc1-idle { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.4; stroke-dasharray: 2 4; }
+.rlc1-t-idle { font-size: 13px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rlc1-idlebox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+</style>
+<defs>
+<marker id="rlc1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rlc1-aq" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="rlc1-ar" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="rlc1-hd" x="24" y="36">TO BE BUILT &#183; TWO WAYS IN, SHAPE NOT DECIDED</text>
+<rect class="rlc1-ext" x="40" y="60" width="220" height="64" rx="6"/>
+<text class="rlc1-t-ext" x="54" y="82">Policyholder</text>
+<text class="rlc1-k" x="54" y="98">[Person]</text>
+<text class="rlc1-s" x="54" y="116">reports a claim, with photos</text>
+<rect class="rlc1-ext" x="440" y="60" width="200" height="64" rx="6"/>
+<text class="rlc1-t-ext" x="454" y="82">Contact center agent</text>
+<text class="rlc1-k" x="454" y="98">[Person]</text>
+<text class="rlc1-s" x="454" y="116">takes phoned-in claims</text>
+<rect class="rlc1-ext" x="700" y="60" width="236" height="80" rx="6"/>
+<text class="rlc1-t-ext" x="714" y="82">CRM agent screens</text>
+<text class="rlc1-k" x="714" y="98">[third-party SaaS]</text>
+<text class="rlc1-s" x="714" y="116">new structured claim form</text>
+<text class="rlc1-s" x="714" y="132">configured, no code</text>
+<rect class="rlc1-box" x="40" y="200" width="220" height="110" rx="6"/>
+<text class="rlc1-t" x="54" y="222">Portal website and API</text>
+<text class="rlc1-k" x="54" y="238">[existing, team-built]</text>
+<text class="rlc1-s" x="54" y="256">adds a report-a-claim form</text>
+<text class="rlc1-s" x="54" y="272">policyholder sign-ins only</text>
+<rect class="rlc1-q" x="400" y="200" width="536" height="170" rx="6"/>
+<text class="rlc1-t-q" x="416" y="224">Claims system ?</text>
+<text class="rlc1-k" x="416" y="240">[shape not decided]</text>
+<rect class="rlc1-mod" x="416" y="260" width="120" height="50" rx="4"/>
+<text class="rlc1-tm" x="426" y="280">Intake</text>
+<text class="rlc1-s" x="426" y="298">report or webhook</text>
+<rect class="rlc1-mod" x="544" y="260" width="120" height="50" rx="4"/>
+<text class="rlc1-tm" x="554" y="280">Triage</text>
+<text class="rlc1-s" x="554" y="298">severity, queue</text>
+<rect class="rlc1-mod" x="672" y="260" width="120" height="50" rx="4"/>
+<text class="rlc1-tm" x="682" y="280">Handoff</text>
+<text class="rlc1-s" x="682" y="298">case in the CRM</text>
+<rect class="rlc1-mod" x="800" y="260" width="120" height="50" rx="4"/>
+<text class="rlc1-tm" x="810" y="280">Notify</text>
+<text class="rlc1-s" x="810" y="298">email or text</text>
+<text class="rlc1-s" x="416" y="338">about 30 claims a day</text>
+<text class="rlc1-s" x="416" y="356">4,800 in 72 hours after last June's storm</text>
+<rect class="rlc1-ext" x="40" y="460" width="200" height="70" rx="6"/>
+<text class="rlc1-t-ext" x="54" y="482">Customer identity</text>
+<text class="rlc1-k" x="54" y="498">[existing]</text>
+<text class="rlc1-s" x="54" y="516">policyholder sign-in</text>
+<rect class="rlc1-ext" x="400" y="460" width="200" height="70" rx="6"/>
+<text class="rlc1-t-ext" x="414" y="482">CRM REST API</text>
+<text class="rlc1-k" x="414" y="498">[third-party SaaS]</text>
+<text class="rlc1-s" x="414" y="516">throttles at peak</text>
+<rect class="rlc1-ext" x="736" y="460" width="200" height="70" rx="6"/>
+<text class="rlc1-t-ext" x="750" y="482">Email and text</text>
+<text class="rlc1-k" x="750" y="498">[delivery service]</text>
+<text class="rlc1-s" x="750" y="516">policyholder updates</text>
+<path class="rlc1-flow" d="M 150,124 V 194" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="158" y="164">browser</text>
+<path class="rlc1-flow" d="M 640,92 H 694" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="646" y="84">browser</text>
+<path class="rlc1-open" d="M 260,275 H 394" marker-end="url(#rlc1-aq)"/>
+<text class="rlc1-el-q" x="272" y="265">part of the portal,</text>
+<text class="rlc1-el-q" x="272" y="295">or its own system?</text>
+<path class="rlc1-flow" d="M 818,140 V 194" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="826" y="164">webhook when an</text>
+<text class="rlc1-el" x="826" y="178">agent saves a claim</text>
+<path class="rlc1-flow" d="M 150,310 V 454" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="158" y="400">sign-in</text>
+<path class="rlc1-flow" d="M 500,370 V 454" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="508" y="404">create a case, or add</text>
+<text class="rlc1-el" x="508" y="418">severity to an agent's case</text>
+<path class="rlc1-flow" d="M 836,370 V 454" marker-end="url(#rlc1-a)"/>
+<text class="rlc1-el" x="844" y="412">notify</text>
+<path class="rlc1-flow" d="M 24,566 H 54"/>
+<text class="rlc1-el" x="62" y="570">known</text>
+<path class="rlc1-open" d="M 124,566 H 154"/>
+<text class="rlc1-el" x="162" y="570">open question</text>
+<rect class="rlc1-mod" x="262" y="558" width="30" height="16" rx="3"/>
+<text class="rlc1-el" x="300" y="570">a job the system must do, not yet a part</text>
+</g>
+</svg>
