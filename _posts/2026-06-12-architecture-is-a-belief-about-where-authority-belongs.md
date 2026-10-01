@@ -28,7 +28,7 @@ Contour is the precision of the authority claim, calibrated by two conditions:
 - **Behavioral coherence**: the authority's decisions, facts, and behaviors change together for the same reasons
 - **Operational coherence**: no behavior inside the boundary needs to scale or fail independently of the others
 
-CQRS, for example, splits read and write models for the same domain not because they are behaviorally incoherent, but because their operational envelopes are incompatible; reads run at far higher volume than writes.
+CQRS, for example, splits read and write models for the same domain not because they are behaviorally incoherent, but because their operational envelopes are incompatible. Reads run at far higher volume than writes.
 
 A well-contoured authority can be named precisely: "OrderCheckoutService" tells you what it owns, while "OrderService" does not. Needing a follow-up explanation is the signal that contour might be misaligned.
 
@@ -36,7 +36,7 @@ A well-contoured authority can be named precisely: "OrderCheckoutService" tells 
 
 Bond is the enforcement strength of the boundary, measured by the consequence of bypass: what breaks when the boundary fails.
 
-A strongly bonded authority has no known bypass; all interactions must go through its contract. A weakly bonded authority has routes around it such as direct database access, internal calls that skip validation, or shared state that circumvents the service layer. Bond strength is proportional to consequence. A payment processing boundary that is bypassed can produce corrupted financial state, while a read model that serves slightly stale data can tolerate a weaker bond.
+A strongly bonded authority has no known bypass. All interactions must go through its contract. A weakly bonded authority has routes around it such as direct database access, internal calls that skip validation, or shared state that circumvents the service layer. Bond strength is proportional to consequence. A payment processing boundary that is bypassed can produce corrupted financial state, while a read model that serves slightly stale data can tolerate a weaker bond.
 
 ## Style, Characteristics, and Team Topology
 
@@ -60,13 +60,13 @@ The most persistent variation arrives through early optimization. Before a domai
 
 Architectural arguments often fail because the failure they predict for the current system, and examined from previous systems, arrives years after, and the cost is rarely expressed in terms legible to the people who make the final call.
 
-When a facade's validation rules and a domain service's rules diverge, people tend not to trace it back to the decision to put business logic in a routing layer (for example); they trace it to human error. When a decomposed architecture becomes expensive to change, no one traces it back to service boundaries drawn before behavioral coherence was understood; they trace it to team coordination.
+When a facade's validation rules and a domain service's rules diverge, people tend not to trace it back to the decision to put business logic in a routing layer (for example). They trace it to human error. When a decomposed architecture becomes expensive to change, no one traces it back to service boundaries drawn before behavioral coherence was understood. They trace it to team coordination.
 
 The lag is measured in years, and by the time the drift is painful, the decision that caused it is no longer traceable to the people dealing with its consequences.
 
 ## Authority in Practice: An Order Workflow
 
-An order workflow is a useful thread to follow; it touches most of the patterns where authority gets misplaced.
+An order workflow is a useful thread to follow because it touches most of the patterns where authority gets misplaced.
 
 ### No Authority Declared
 
@@ -94,10 +94,10 @@ Both controllers reach into the entire manager layer. `CheckoutController` calls
 
 `OrderPaymentMgr` mixes order lifecycle logic with payment processing. `InventoryUserMgr` mixes stock management with user account concerns. Neither manager is contoured to a single domain; neither controller is contoured to a single workflow. And underneath all of it, a single database holds everything.
 
-**Contour**: undefined. Behavioral coherence was never applied; `OrderPaymentMgr` conflates order lifecycle with payment processing, behaviors that change for entirely different reasons.
-**Bond**: none. With no boundaries declared, the consequence of bypass is invisible; there is nothing to bypass and nothing to break until the system is large enough that the cost becomes unavoidable.
+**Contour**: undefined. Behavioral coherence was never applied. `OrderPaymentMgr` conflates order lifecycle with payment processing, behaviors that change for entirely different reasons.
+**Bond**: none. With no boundaries declared, the consequence of bypass is invisible. There is nothing to bypass and nothing to break until the system is large enough that the cost becomes unavoidable.
 
-This is not inherently wrong for an early-stage system; the problem is not the monolith but that authority was never considered. When the system grows, there is nothing to grow from.
+This is not inherently wrong for an early-stage system. The problem is not the monolith but that authority was never considered. When the system grows, there is nothing to grow from.
 
 ### Decomposition Without Authority
 
@@ -121,8 +121,8 @@ The team recognizes that `OrderPaymentMgr` and `InventoryUserMgr` are too broad 
 
 Contour has improved on paper: there are named services with named responsibilities. Bond has improved in structure but not in practice. Each service has its own schema, which declares a boundary. But PaymentService queries the orders schema directly, and that bypass exists for any service that knows the connection string. Each such query embeds the schema's shape into the consumer's code, so a data model change requires simultaneous updates across every service that queries it, which turns out to be all of them. The consequence surfaces not at the point of access but at the point of change.
 
-**Contour**: named but not coherent. The names exist, but the boundaries weren't drawn along behavioral coherence lines; PaymentService queries order data because order state and payment decisions are tightly coupled in practice, and the boundary didn't account for that.
-**Bond**: declared but bypassed. The consequence of cross-schema access was underestimated; it materializes the first time the order data model changes and every dependent service breaks with it.
+**Contour**: named but not coherent. The names exist, but the boundaries weren't drawn along behavioral coherence lines. PaymentService queries order data because order state and payment decisions are tightly coupled in practice, and the boundary didn't account for that.
+**Bond**: declared but bypassed. The consequence of cross-schema access was underestimated. It materializes the first time the order data model changes and every dependent service breaks with it.
 
 This is the most common intermediate state: the full complexity of distributed services without the independence those services were supposed to deliver.
 
@@ -150,9 +150,9 @@ The facade validates order requests before passing them to OrderService. But Ord
 Neither layer is clearly the authority. Both claim to be.
 
 **Contour**: split across two behavioral concerns. Validation rules change when business requirements change; response shaping changes when clients change. Behavioral coherence says these belong to different authorities, but the facade holds both.
-**Bond**: split across two enforcement points. The consequence is inconsistent behavior; the rule a caller sees depends on which enforcement point their request path reaches first.
+**Bond**: split across two enforcement points. The consequence is inconsistent behavior. The rule a caller sees depends on which enforcement point their request path reaches first.
 
-A facade holds clear authority over presentation concerns: routing, shaping, and aggregating results. The moment it acquires business logic, it becomes a second authority over the domain; divergence is not a risk to manage but the mechanical consequence of the split. The fix is not to remove the facade but to clarify what it owns.
+A facade holds clear authority over presentation concerns: routing, shaping, and aggregating results. The moment it acquires business logic, it becomes a second authority over the domain. Divergence is not a risk to manage but the mechanical consequence of the split. The fix is not to remove the facade but to clarify what it owns.
 
 ### Domain-Driven Decomposition
 
@@ -172,10 +172,10 @@ When the migration completes, each domain exclusively owns its data and has mode
 └──────────────────────────────────────────────────────┘
 ```
 
-An order's state can only change through the Order aggregate root: `Order.Accept()`, `Order.Fulfill()`, `Order.Cancel()`. The aggregate root enforces the invariants that govern those transitions. PaymentService cannot read the orders table; if it needs order data, it calls the Order context's service boundary.
+An order's state can only change through the Order aggregate root: `Order.Accept()`, `Order.Fulfill()`, `Order.Cancel()`. The aggregate root enforces the invariants that govern those transitions. PaymentService cannot read the orders table. If it needs order data, it calls the Order context's service boundary.
 
-**Contour**: named and coherent. Order lifecycle, payment processing, and inventory management each change for different reasons; the boundaries reflect that behavioral coherence.
-**Bond**: strong, proportional to the consequence of bypass. State transitions through aggregate roots carry high consequence if violated; the aggregate root enforces accordingly.
+**Contour**: named and coherent. Order lifecycle, payment processing, and inventory management each change for different reasons, and the boundaries reflect that behavioral coherence.
+**Bond**: strong, proportional to the consequence of bypass. State transitions through aggregate roots carry high consequence if violated, so the aggregate root enforces accordingly.
 
 ### Reporting Access Breaks the Bond
 
@@ -197,7 +197,7 @@ The order system is performing well, but dashboard queries against order data ar
 └──────────────────────────────────────────────────────┘
 ```
 
-The contour is unchanged; OrderService still owns order lifecycle. The bond is weakened but the consequence of the bypass is low: a read cannot modify order state.
+The contour is unchanged. OrderService still owns order lifecycle. The bond is weakened but the consequence of the bypass is low: a read cannot modify order state.
 
 The `orders` table has grown large enough that query performance on the checkout flow degrades under load. The team designs a migration: split `orders` into `orders` (header: customer, status, timestamps) and `order_line_items` (per-item: SKU, quantity, price). The migration cannot proceed. The `order_summary` materialized view joins across columns that would be split into two tables, and the nightly export job selects from it in a pipeline the reporting team controls on a separate release schedule. Coordinating the schema change, the view update, and the export job across two teams and two release schedules stalls the migration for two quarters. The production schema cannot change freely because the reporting concern has an implicit claim on its shape.
 
@@ -228,7 +228,7 @@ The corrected version keeps the production schema exclusively in OrderService's 
 OrderService publishes order data to a reporting store it controls, whether through events, a scheduled export, or a dedicated read model.
 
 **Contour**: coherent. OrderService owns order behavior and the production schema. ReportingService owns its read model.
-**Bond**: maintained. The `orders` schema has no bypass; the reporting store is a separate authority over reporting-shaped data.
+**Bond**: maintained. The `orders` schema has no bypass. The reporting store is a separate authority over reporting-shaped data.
 
 ## Conclusion
 

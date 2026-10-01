@@ -19,7 +19,7 @@ An idea is a **research question** with a working hypothesis, not a finished tak
 | Scores | Always | U, D, S, E, and the total |
 | Hypothesis | Always | The claim the post would argue, stated so the research could disprove it. One sentence in a backlog row; the full entry can expand it |
 | Evidence | Full entry | Named research leads: papers, RFCs, incident reports, books, docs. Leads, not verified citations |
-| Lens and backing | Full entry | Which of the three moves it uses, and site pages it can list in `sources` |
+| Lens and backing | Full entry | Which of the three moves it uses, and site pages whose external sources the research can start from (never cited in the post) |
 | Experience | Full entry, optional | The author's own example, when one exists |
 | Reader's check this week | Full entry, when U is 4 or 5 | The concrete thing a reader can inspect in their own system |
 | Hook | Full entry | A one-line social opener |

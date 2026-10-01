@@ -41,9 +41,9 @@ The test suite does have secondary value as documentation that new developers ca
 
 Focus on testing assumptions that matter most. Not all assumptions carry equal risk. Prioritize tests that validate:
 
-- **Business rules** — How discounts work, what triggers notifications, when transactions are valid
-- **Edge cases stakeholders haven't considered** — What happens when the cart is empty? When the user has no purchase history?
-- **Data validity assumptions** — What "valid" input looks like, what formats are acceptable, what happens with missing fields
+- **Business rules.** How discounts work, what triggers notifications, when transactions are valid
+- **Edge cases stakeholders haven't considered.** What happens when the cart is empty? When the user has no purchase history?
+- **Data validity assumptions.** What "valid" input looks like, what formats are acceptable, what happens with missing fields
 
 If requirements are clear and stable, write tests to validate implementation. If requirements are uncertain, write tests to validate assumptions and expect them to change as understanding develops. That question matters more than any debate about test-first versus test-after.
 

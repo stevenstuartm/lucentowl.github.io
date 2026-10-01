@@ -5,7 +5,7 @@ This is a map of where Lucent Owl and its author can argue with authority. Use i
 Authority here means the site can firmly support what it argues. There are three ways to earn it:
 
 - **Research:** primary sources, specifications, empirical studies, public incident reports, and data, investigated until a position holds.
-- **Backing:** study guides, resources, and case studies that a post can list in `sources`, so a reader who clicks through finds depth.
+- **Backing:** study guides, resources, and case studies that show the site has already worked through an area. They give a post a head start on research, since their external sources can be followed and cited, but a post never cites or names them. Its sources are always external.
 - **Lived experience:** the author has built, run, or led the thing and can say what went wrong.
 
 Research is the main path. Most posts on the site began as research projects: a question without a settled answer, investigated until an argument emerged. The exceptions post weighed which claims had measurable backing. The reads-and-writes post worked from RFC 5789 and real API behavior. The authority post synthesized SOLID, normalization, and least privilege. Experience sharpens a post and supplies examples, but it isn't a gate. Treating it as one would confine the blog to the author's past and stop both the audience and the author from growing.
@@ -108,7 +108,7 @@ Contrarian posts start from solid ground here, and they can be as sharp as the r
 
 ### Tier 2: Lived, Lightly Backed
 
-These are real production experience with little or nothing on the site. Posts here have to name external sources, since the site has no guide to cite. Each is also a candidate for new guides that would move it to Tier 1.
+These are real production experience with little or nothing on the site. Posts here start their research from scratch, since no guide has already gathered the external sources. Each is also a candidate for new guides that would move it to Tier 1.
 
 | Domain | Lived evidence | Site gap |
 | --- | --- | --- |
@@ -133,7 +133,7 @@ The site teaches these in depth, but the resume doesn't show production ownershi
 
 ### Reference Coverage
 
-These are teaching fundamentals with no argumentative stake: data structures and algorithms, networking, GoF patterns, machine learning and MLOps, statistics, SEO. They make good `sources` backing for a post, and poor post subjects on their own.
+These are teaching fundamentals with no argumentative stake: data structures and algorithms, networking, GoF patterns, machine learning and MLOps, statistics, SEO. They can inform a post's background reasoning, never its citations, and they make poor post subjects on their own.
 
 ### Growth Edges
 

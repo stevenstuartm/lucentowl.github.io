@@ -7,8 +7,6 @@ author: steven-stuart
 sources:
   - title: "C# reference: ! (null-forgiving) operator"
     url: "https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/null-forgiving"
-  - title: "C# Nullable Reference Types"
-    url: "/study-guides/dotnet/c-sharp/fundamentals/nullable-reference-types.html"
   - title: "ASP.NET Core: Model validation"
     url: "https://learn.microsoft.com/en-us/aspnet/core/mvc/models/validation"
   - title: "System.Text.Json: Respect nullable annotations"
@@ -39,7 +37,7 @@ Nullable reference types are a compile-time contract. `string` and `string?` com
 
 Inside a method, the flow analysis is thorough. It follows every branch, every early return, and every pattern match, and when it warns, the fix is usually local: check for null, restructure the flow, or add an attribute like `NotNullWhen` so the analysis can follow a helper method. Warnings of that kind tend to get fixed during the migration sprint, because the compiler can see the fix working.
 
-The analysis has blind spots, and the site's nullable reference types guide lists them: callers outside the compilation, reflection, deserializers, array elements, unannotated code, and suppressions themselves. Set aside array elements and suppressions, and every item on that list is a boundary, a place where a value is created by code the compiler never analyzed. Nothing inside the method can clear a warning that starts there, so that's where a team in a hurry reaches for `!`.
+The analysis has blind spots: callers outside the compilation, reflection, deserializers, array elements, unannotated code, and suppressions themselves. Set aside array elements and suppressions, and every item on that list is a boundary, a place where a value is created by code the compiler never analyzed. Nothing inside the method can clear a warning that starts there, so that's where a team in a hurry reaches for `!`.
 
 ## The Suppressions Pile Up Where Data Enters
 

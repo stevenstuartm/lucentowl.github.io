@@ -35,8 +35,6 @@ sources:
     url: "https://github.com/cloudflare/workerd/issues/6849"
   - title: "nodejs/undici #5459: Support HTTP QUERY method"
     url: "https://github.com/nodejs/undici/pull/5459"
-  - title: "API Design Architecture"
-    url: "/study-guides/architecture/api-design-architecture.html"
 ---
 
 If you've built a search screen with more than a handful of filters, you've probably had this argument. Someone puts the filters in the query string, the URL grows past what a proxy will accept, and the team splits. One side wants to send the filters as a body on a GET, and the other says GET bodies aren't allowed, so the endpoint becomes a POST. The POST works, and a read now looks like a write to everything between the client and the server.
@@ -151,7 +149,7 @@ Until caches key on the body, the RFC's own mechanism gets much of the caching b
 
 ## Choosing a Method for Each Read
 
-QUERY doesn't replace GET. A read whose inputs fit comfortably in a URL is best served as a GET, which every cache understands, and this site's API design guide covers the conventions for filtering, sorting, and field selection in query strings. QUERY is for reads that don't fit, and POST keeps a place only where the path to the server can't carry QUERY yet.
+QUERY doesn't replace GET. A read whose inputs fit comfortably in a URL is best served as a GET, which every cache understands. QUERY is for reads that don't fit, and POST keeps a place only where the path to the server can't carry QUERY yet.
 
 | The read | Method today | Why |
 | --- | --- | --- |

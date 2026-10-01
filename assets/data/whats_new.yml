@@ -17,6 +17,13 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: api-gateway-shouldnt-know
+  change: new
+  type: post
+  title: "The API Gateway Shouldn't Know Your Business"
+  url: /blog/2026/10/01/the-api-gateway-shouldnt-know-your-business.html
+  note: "Why business rules drift into API gateways, what each one loses when it lands there, and a one-question test for what belongs."
+
 - id: learning-paths
   change: new
   title: "Learning paths"

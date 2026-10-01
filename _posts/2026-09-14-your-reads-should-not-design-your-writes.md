@@ -36,7 +36,7 @@ sources:
 
 Any API endpoint that updates part of a record has to decide what a missing field means, whether the client left it alone or wants it cleared. Most business APIs face that decision constantly, because records like customers, orders, and accounts are edited through forms and clients that rarely send everything. Few problems have left me as dizzy as this one, partly because it's hard, but mostly because of how many competing solutions keep getting promoted for it, from patch formats to field masks to change-tracking client libraries.
 
-Most of those solutions ask every client to get something subtle right, when most teams need a write surface any client can call correctly on the first try. I think the simplest way there is PUT, where every body must include every field and the server has nothing left to guess. That only works once a resource is small enough for any client to send whole, so the real change is to stop letting the shape of your reads design your writes. When a group of fields has a single owner, when a change starts a workflow, or when a collection's items come and go individually, each gets its own path. That can look like a workaround, but I'd argue it's healthy normalization of the write surface.
+Most of those solutions ask every client to get something subtle right, when most teams need a write surface any client can call correctly on the first try. I think the simplest way there is PUT, where every body must include every field and the server has nothing left to guess. That only works once a resource is small enough for any client to send whole, so the change that matters is to stop letting the shape of your reads design your writes. When a group of fields has a single owner, when a change starts a workflow, or when a collection's items come and go individually, each gets its own path. That can look like a workaround, but I'd argue it's healthy normalization of the write surface.
 
 ## Write Intentions Exceed Request Semantics
 
@@ -199,7 +199,7 @@ On a normalized surface, every body carries all of its fields, every field has o
 - Group fields into a writable resource only when they share an owner, an authorization scope, and a workflow
 - Replace those resources whole with PUT, requiring every field in the body
 - Give collections with identity-bearing elements their own POST and DELETE endpoints
-- Name the operation when a change is a state transition or has to be atomic across concerns
+- Give the operation its own endpoint when a change is a state transition or has to be atomic across concerns
 - Require `If-Match` on PUTs to resources more than one person edits
 - Version a writable resource when it gains a field, and let reads grow freely
 - Move existing clients onto the narrow endpoints, then let aggregate URLs answer GET and refuse writes

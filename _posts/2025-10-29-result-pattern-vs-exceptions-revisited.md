@@ -173,7 +173,7 @@ public Result<Order> GetOrder(string id) { /* ... */ }
 GetOrder("123"); // Completely ignored, no compiler error
 ```
 
-The "compiler safety" argument assumes static analyzers and discipline; the same discipline proper exception handling requires.
+The "compiler safety" argument assumes static analyzers and discipline, the same discipline proper exception handling requires.
 
 **Strength**: Results in C# provide discoverability, not enforcement.
 

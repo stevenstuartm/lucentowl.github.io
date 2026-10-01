@@ -19,10 +19,6 @@ sources:
     url: "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
   - title: "GitHub Docs: Managing a merge queue"
     url: "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
-  - title: "GitHub Collaboration"
-    url: "/study-guides/developer-tools/github-collaboration.html"
-  - title: "Git Advanced Operations"
-    url: "/study-guides/developer-tools/git-advanced-operations.html"
 ---
 
 I know the monorepo debate feels worn out. I keep coming back to it because the usual case for a monorepo skips the line in Google's own account that explains why it works. Rachel Potvin and Josh Levenberg's 2016 Communications of the ACM article on Google's repository lists the model's costs in three categories, and the first is "tooling investments for both development and execution." Google's monorepo works because Google funds teams to make it work.
@@ -97,7 +93,7 @@ The tooling bill follows the owners a change has to cross, not the lines of code
 
 ## Much of the Tooling Is Now for Sale, but the Owner Isn't
 
-A lot of what Google had to build for itself can now be bought or configured. A GitHub `CODEOWNERS` file maps paths to owners and, with branch protection, blocks a merge until an owner approves. GitHub's merge queue tests each pull request against the latest base branch and every change queued ahead of it, the guarantee SubmitQueue was built for, at smaller scale. Git's partial clone and sparse checkout keep a large repository workable on a laptop, and build tools like Nx, Turborepo, and Bazel compute what a change affects. The site's GitHub Collaboration and Git Advanced Operations guides cover how each is set up.
+A lot of what Google had to build for itself can now be bought or configured. A GitHub `CODEOWNERS` file maps paths to owners and, with branch protection, blocks a merge until an owner approves. GitHub's merge queue tests each pull request against the latest base branch and every change queued ahead of it, the guarantee SubmitQueue was built for, at smaller scale. Git's partial clone and sparse checkout keep a large repository workable on a laptop, and build tools like Nx, Turborepo, and Bazel compute what a change affects.
 
 What no tool supplies is the team that does cross-cutting changes for the whole organization. Google's article describes modernization efforts "managed centrally by dedicated codebase maintainers," including a Compiler team that ships more than 20 C++ compiler releases a year because it can see and fix every caller first. `CODEOWNERS` routes a change to a thousand reviewers, but it doesn't say who is allowed to send one or who decides it was worth their time. Google answers those questions with a committee.
 

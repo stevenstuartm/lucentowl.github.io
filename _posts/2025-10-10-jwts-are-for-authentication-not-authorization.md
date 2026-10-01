@@ -19,7 +19,7 @@ JWTs are immutable by design. Once signed and issued, the claims inside cannot b
 
 ## Shortening Lifetimes Doesn't Solve It
 
-The typical response is to shorten JWT lifetimes to 5-15 minutes and refresh aggressively. This creates chatty network traffic with constant token refresh requests, adds complexity with more moving parts and new failure paths, and doesn't even solve the core issue; there's still a delay window, just shorter. You're still working around the fundamental mismatch between immutable tokens and dynamic authorization.
+The typical response is to shorten JWT lifetimes to 5-15 minutes and refresh aggressively. This creates chatty network traffic with constant token refresh requests, adds complexity with more moving parts and new failure paths, and doesn't even solve the core issue. There's still a delay window, just shorter. You're still working around the fundamental mismatch between immutable tokens and dynamic authorization.
 
 ## Performance Is Not the Tradeoff
 

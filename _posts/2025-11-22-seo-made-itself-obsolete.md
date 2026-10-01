@@ -65,7 +65,7 @@ There's another reason to pursue SEO excellence even if you won't rank soon: the
 
 Stop treating these as competing alternatives. Instead:
 
-- Use social channels for democratic reach and speed; treat them as primary investment, not leftover scraps
+- Use social channels for democratic reach and speed, and treat them as primary investment, not leftover scraps
 - Build platform-native content for TikTok, YouTube, Discord, and Reddit
 - Let SEO compound in the background as a long-term asset for authority and trust
 - Recognize that newcomers need both: social to grow quickly, SEO to establish credibility over time

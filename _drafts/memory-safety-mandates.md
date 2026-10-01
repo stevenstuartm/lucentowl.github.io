@@ -15,10 +15,8 @@ sources:
     url: "https://bidenwhitehouse.archives.gov/wp-content/uploads/2024/02/Final-ONCD-Technical-Report.pdf"
   - title: "NSA and CISA: Memory Safe Languages: Reducing Vulnerabilities in Modern Software Development (June 2025)"
     url: "https://www.cisa.gov/resources-tools/resources/memory-safe-languages-reducing-vulnerabilities-modern-software-development"
-  - title: "C# Unsafe Code and Pointers"
-    url: "/study-guides/dotnet/c-sharp/advanced/unsafe-code-and-pointers.html"
-  - title: "C# Native Interop (P/Invoke and COM)"
-    url: "/study-guides/dotnet/c-sharp/advanced/native-interop.html"
+  - title: "Microsoft Learn: Native interoperability best practices"
+    url: "https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices"
   - title: "dotnet/designs: Annotating members as unsafe (caller-unsafe design)"
     url: "https://github.com/dotnet/designs/blob/main/accepted/2025/memory-safety/caller-unsafe.md"
   - title: "Richard Lander: Improving C# Memory Safety (.NET Blog, May 2026)"
@@ -35,8 +33,6 @@ sources:
     url: "https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/libraries"
   - title: "SixLabors ImageSharp"
     url: "https://github.com/SixLabors/ImageSharp"
-  - title: "Vulnerability Management"
-    url: "/study-guides/security/threats-and-vulnerabilities.html"
 ---
 
 C# is memory safe. Your P/Invoke calls aren't.
@@ -65,9 +61,9 @@ The NSA's sheet treats localization as the thing that makes escape hatches accep
 
 ### Your Own Code: The Keyword Marks Only Pointers
 
-The `unsafe` keyword in C# enables pointer syntax, and it requires the project to set `AllowUnsafeBlocks`. A reviewer who searches for the keyword finds the pointer code. The reviewer doesn't find the other APIs that bypass the same checks, because they compile without it. `Unsafe.Add` skips bounds checks on reference arithmetic, `Unsafe.As` reinterprets one type as another, and `MemoryMarshal.GetReference` returns a reference to a span's first element without checking that the span has one, which is where that arithmetic usually starts. `CollectionsMarshal.AsSpan` hands out a span over a `List<T>`'s backing array that the list can abandon on the next add. The site's unsafe code guide lists these as needing the same review as pointer code.
+The `unsafe` keyword in C# enables pointer syntax, and it requires the project to set `AllowUnsafeBlocks`. A reviewer who searches for the keyword finds the pointer code. The reviewer doesn't find the other APIs that bypass the same checks, because they compile without it. `Unsafe.Add` skips bounds checks on reference arithmetic, `Unsafe.As` reinterprets one type as another, and `MemoryMarshal.GetReference` returns a reference to a span's first element without checking that the span has one, which is where that arithmetic usually starts. `CollectionsMarshal.AsSpan` hands out a span over a `List<T>`'s backing array that the list can abandon on the next add. They need the same review as pointer code.
 
-P/Invoke has the same gap. A `[DllImport]` declaration needs neither the keyword nor the project setting, yet a declaration whose types don't match the native signature corrupts memory as surely as a bad pointer. The site's native interop guide lists the usual mismatches, such as a C `long` declared as a C# `long`, which is 8 bytes in C# but 4 bytes in C on Windows. The newer `[LibraryImport]` source generator does require `AllowUnsafeBlocks`. So a project can set it without touching a pointer, and a project that never sets it can still call `Unsafe.Add` and `[DllImport]` freely. The setting tells you little either way.
+P/Invoke has the same gap. A `[DllImport]` declaration needs neither the keyword nor the project setting, yet a declaration whose types don't match the native signature corrupts memory as surely as a bad pointer. Microsoft's native interoperability best practices warn about the usual mismatches, such as a C `long` declared as a C# `long`, which is 8 bytes in C# but 4 bytes in C on Windows. The newer `[LibraryImport]` source generator does require `AllowUnsafeBlocks`. So a project can set it without touching a pointer, and a project that never sets it can still call `Unsafe.Add` and `[DllImport]` freely. The setting tells you little either way.
 
 Microsoft's own design work moves that line. Its accepted design for annotating members as unsafe treats "all P/Invoke methods" as unsafe, "because they may compromise memory safety if the callee function does not match the P/Invoke method specification," and it names most of the `Unsafe` class and `Marshal` as candidates too. The model turns `unsafe` into a contract that propagates to callers. Richard Lander's May 2026 announcement on the .NET Blog puts it in C# 16, as an opt-in preview with .NET 11 and a production release with .NET 12, and makes it a compile error to declare a `LibraryImport` method without marking it `safe` or `unsafe`, so someone has to vouch for each native call. When a team turns it on, the compiler will find the unsafe code. Until then, a search has to.
 
@@ -103,7 +99,7 @@ Search for the keyword and for the APIs that bypass the same checks without it:
 git grep -n -E '\bunsafe\b|\[(DllImport|LibraryImport)|\b(Unsafe|MemoryMarshal|CollectionsMarshal|Marshal|NativeMemory)\.|SkipLocalsInit|\bGCHandle\b' -- '*.cs'
 ```
 
-Every hit should have a reason the unsafe code guide would accept: interop, native memory, function pointers, or a hot path a profiler measured. A hit with none of those can usually be replaced with `Span<T>` or a safe BCL method. A hit that stays should sit behind a narrow wrapper, so the unsafe lines live in one reviewed class and don't spread into callers.
+Every hit should have a reason that holds up in review: interop, native memory, function pointers, or a hot path a profiler measured. A hit with none of those can usually be replaced with `Span<T>` or a safe BCL method. A hit that stays should sit behind a narrow wrapper, so the unsafe lines live in one reviewed class and don't spread into callers.
 
 ### Step 2: List the Native Binaries You Ship
 
@@ -152,7 +148,7 @@ The ranking decides what to shrink first, and each native component has four way
 - **Replace it with a managed library** where one exists, which is the roadmap guide's first suggestion for existing unsafe components. ImageSharp, for example, describes itself as "fully managed." A managed library can still use `Unsafe` internally for speed, so run step 1 against its source too, but a bug in it tends to end in an exception rather than a heap overflow.
 - **Move it out of process.** A decoder running in a separate, low-privilege worker process can crash or be corrupted without corrupting the service's memory.
 - **Narrow what reaches it.** Check sizes, formats, and dimensions in managed code before the bytes cross the boundary. The roadmap guide calls this wrapping, and asks that the wrapper "ensure all inputs cannot exceed memory bounds" in the code behind it.
-- **Keep it and track it.** Some native code has no managed replacement. It goes in the software bill of materials, and the team watches its advisories. The site's vulnerability management guide covers the SBOM side, and the Bad Practices document asks for an SBOM anyway.
+- **Keep it and track it.** Some native code has no managed replacement. It goes in the software bill of materials, and the team watches its advisories. The Bad Practices document asks for an SBOM anyway.
 
 The result of those four steps is the roadmap. For most .NET products it's short: a list of native components, the input each one sees, and a decision for each. That short document is still a better answer to the guidance than pointing at C# on a list.
 

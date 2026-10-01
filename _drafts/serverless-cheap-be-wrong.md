@@ -17,12 +17,8 @@ sources:
     url: "https://aws.amazon.com/fargate/pricing/"
   - title: "AWS Lambda Developer Guide: Understanding Lambda function scaling"
     url: "https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html"
-  - title: "AWS Lambda for System Architects"
-    url: "/study-guides/infrastructure/aws/aws-lambda-fundamentals.html"
-  - title: "Total Cost of Ownership (TCO)"
-    url: "/study-guides/architecture/total-cost-of-ownership.html"
-  - title: "When Someone Else's Problem Becomes Your Solution (Kubernetes to ECS Fargate case study)"
-    url: "/case-studies/kubernetes-to-ecs-migration.html"
+  - title: "AWS Lambda Developer Guide: Configure Lambda function memory"
+    url: "https://docs.aws.amazon.com/lambda/latest/dg/configuration-memory.html"
   - title: "Marcin Kolny: Scaling up the Prime Video audio/video monitoring service and reducing costs by 90% (Prime Video Tech, 2023, archived)"
     url: "https://web.archive.org/web/2023/https://www.primevideotech.com/video-streaming/scaling-up-the-prime-video-audio-video-monitoring-service-and-reducing-costs-by-90"
 ---
@@ -95,7 +91,7 @@ The crossover arrives sooner than a CPU comparison suggests, because Lambda bill
 
 A container can use that waiting time. While one request waits on the database, the same process serves others. A standard Lambda execution environment can't, because Lambda "provisions a separate instance of your execution environment" for each concurrent request, and while an environment handles one request it "is busy and cannot process other requests." In the example above, each request holds 512 MB of Lambda for its full 100 ms, but uses only 10 ms of a container's CPU. The more of a handler's time goes to waiting on I/O, the lower the crossover.
 
-For CPU-bound work the gap is smaller but still there. At 1,769 MB, where the site's Lambda guide notes a function gets the equivalent of one full vCPU, an hour of busy Lambda time costs about $0.104. An hour of a 1 vCPU, 2 GB Fargate task costs about $0.049, so the container wins whenever it's busy more than about half the time.
+For CPU-bound work the gap is smaller but still there. At 1,769 MB, where AWS's documentation says a function has the equivalent of one vCPU, an hour of busy Lambda time costs about $0.104. An hour of a 1 vCPU, 2 GB Fargate task costs about $0.049, so the container wins whenever it's busy more than about half the time.
 
 ### AWS Sells Its Own Exit
 
@@ -105,9 +101,9 @@ The provider's own answer to steady load is to bring back reserved capacity. Tha
 
 ### Operations Time Can Still Justify the Premium
 
-The table also leaves out people's time, and that's the strongest case for staying. In the Eismann study, 34% of the applications chose serverless so developers no longer had to handle deployment, scaling, or monitoring, and that benefit doesn't expire when the load becomes known. The site's Total Cost of Ownership guide treats staffing as the input most likely to change a ranking. A team with no container platform, no one who wants to own scaling policies, and a gap of about $90 a month, as at 60 requests per second in the table, may be right to keep paying.
+The table also leaves out people's time, and that's the strongest case for staying. In the Eismann study, 34% of the applications chose serverless so developers no longer had to handle deployment, scaling, or monitoring, and that benefit doesn't expire when the load becomes known. Staffing alone can change the ranking. A team with no container platform, no one who wants to own scaling policies, and a gap of about $90 a month, as at 60 requests per second in the table, may be right to keep paying.
 
-That operations cost depends on what replaces serverless, though. In the site's Kubernetes-to-ECS case study, architect time on infrastructure operations fell to near zero after the move to Fargate, so a managed container service doesn't have to bring the operations burden back. Compare serverless with the cheapest platform your team could run without new operations work, not with a cluster.
+That operations cost depends on what replaces serverless, though. When I moved a small team from EKS to ECS Fargate, architect time on infrastructure operations fell to near zero, so a managed container service doesn't have to bring the operations burden back. Compare serverless with the cheapest platform your team could run without new operations work, not with a cluster.
 
 ## Prime Video Left at the Right Time
 

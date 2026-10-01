@@ -15,20 +15,12 @@ sources:
     url: "https://arxiv.org/abs/2103.00170"
   - title: "Pat Helland: Life beyond Distributed Transactions: an Apostate's Opinion (CIDR 2007)"
     url: "https://www.ics.uci.edu/~cs223/papers/cidr07p15.pdf"
-  - title: "Distributed Computing"
-    url: "/study-guides/architecture/distributed-computing.html"
-  - title: "Transactions and Isolation"
-    url: "/study-guides/data/transactions-and-isolation.html"
   - title: "Vaughn Vernon: Effective Aggregate Design, Part II (2011)"
     url: "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf"
   - title: "Pat Helland and Dave Campbell: Building on Quicksand (CIDR 2009)"
     url: "https://dsf.berkeley.edu/cs286/papers/quicksand-cidr2009.pdf"
-  - title: "Domain-Driven Design"
-    url: "/study-guides/architecture/domain-driven-design.html"
-  - title: "Microservices Architecture"
-    url: "/study-guides/architecture/microservices-architecture.html"
-  - title: "Messaging Patterns"
-    url: "/study-guides/architecture/messaging_patterns.html"
+  - title: "Chris Richardson: Pattern: Transactional outbox (microservices.io)"
+    url: "https://microservices.io/patterns/data/transactional-outbox.html"
 ---
 
 Your saga isn't a pattern. It's an apology for where you drew the line. That's too harsh as a rule, and I'll spend most of this post on the sagas it doesn't describe, but it's right often enough that a saga shouldn't be read as a sign of a mature design. A saga tells you that a piece of work crosses a boundary and can't be made atomic. The useful question is whether the work should have crossed that boundary at all.
@@ -71,7 +63,7 @@ Now consider a design that looks similar and isn't. A payments system splits int
 
 Here no service enforces the rule. It holds only after every step has run, so between the steps the books are wrong. Another saga that reads the balance in that window sees a number that disagrees with the payments on record, and a withdrawal approved or declined in that window rests on the wrong number. The countermeasures are all available, like a semantic lock on the account or a pessimistic ordering of steps, and each one is code that recreates the atomicity the split removed. The intermediate state also has no business name. "Payment recorded but not applied" is not a status an accountant would recognize. Double-entry bookkeeping records both sides of a posting in one entry that must balance. When this saga stalls, the fix isn't a business action. It's a data repair.
 
-That's the difference, and it doesn't depend on the saga's mechanics. Both designs use local transactions, events, and compensations. In the first, every invariant is checked atomically inside one participant and the saga moves a process between them. In the second, the saga itself is the enforcement, and a compensation, which the site's Distributed Computing guide notes can fail like any other update, is all that stands between the system and a broken rule. The site's Transactions and Isolation guide makes the same point from the database side. A transaction covers one database, and a saga that spans several gives up isolation, so its intermediate states are visible to everything else.
+That's the difference, and it doesn't depend on the saga's mechanics. Both designs use local transactions, events, and compensations. In the first, every invariant is checked atomically inside one participant and the saga moves a process between them. In the second, the saga itself is the enforcement, and a compensation, which can fail like any other update, is all that stands between the system and a broken rule. The database side shows the same gap. A transaction covers one database, and a saga that spans several gives up isolation, so its intermediate states are visible to everything else.
 
 ## The Test: Would the Business Accept the Intermediate State?
 
@@ -104,7 +96,7 @@ When a saga fails the test, making its compensations more reliable treats the sy
 
 ### Merge the Services Around the Invariant
 
-The most direct fix is to put the data an invariant spans back inside one boundary, so one local transaction enforces it. The site's Domain-Driven Design guide describes this as the aggregate's job, a cluster that changes "together under one set of rules" and is saved in one transaction. The Microservices Architecture guide puts the service-level version plainly. If two services constantly need to change data atomically, that's strong evidence they belong in one service. In the payments example, recording a payment and applying it to the balance becomes one transaction in one service, and the saga disappears. Merging has a cost the DDD guide also names. A larger consistency boundary means more concurrent work contends on the same data, which is why the boundary should enclose what one invariant needs and no more.
+The most direct fix is to put the data an invariant spans back inside one boundary, so one local transaction enforces it. In domain-driven design this is the aggregate's job, a cluster of objects that changes together under one set of rules and is saved in one transaction. The service-level version follows directly. If two services constantly need to change data atomically, that's strong evidence they belong in one service. In the payments example, recording a payment and applying it to the balance becomes one transaction in one service, and the saga disappears. Merging has a cost. A larger consistency boundary means more concurrent work contends on the same data, which is why the boundary should enclose what one invariant needs and no more.
 
 This is also why the saga's appearance is useful as a signal. Boundaries drawn before a domain's rules are known tend to cut through some of them, and the saga is where that shows first. A modular monolith, where modules can still share a transaction, lets those boundaries move cheaply until the rules settle.
 
@@ -112,7 +104,7 @@ This is also why the saga's appearance is useful as a signal. Boundaries drawn b
 
 ### Give One Service the Rule and Make the Others Ask
 
-Sometimes the data can't be merged, because the services have separate owners or separate scaling needs. Then give the invariant to one service and have the others request tentative commitments from it, the way Richardson's Customer Service owns the credit limit. An Inventory service that owns "available stock never goes below zero" grants reservations, and an Order service asks for them. The rule is enforced atomically where it lives, and what crosses the boundary is a request the owner can refuse. The reservation and the reply announcing it still need to leave the owner reliably, which is what the transactional outbox in the site's Messaging Patterns guide is for. It writes the message in the same local transaction as the reservation. That turns a boundary-bug saga into a process saga, because the intermediate state is now a reservation, which the business can name.
+Sometimes the data can't be merged, because the services have separate owners or separate scaling needs. Then give the invariant to one service and have the others request tentative commitments from it, the way Richardson's Customer Service owns the credit limit. An Inventory service that owns "available stock never goes below zero" grants reservations, and an Order service asks for them. The rule is enforced atomically where it lives, and what crosses the boundary is a request the owner can refuse. The reservation and the reply announcing it still need to leave the owner reliably, which is what Richardson's transactional outbox pattern is for. It writes the message in the same local transaction as the reservation. That turns a boundary-bug saga into a process saga, because the intermediate state is now a reservation, which the business can name.
 
 ### Accept the Saga Where the Line Isn't Yours
 

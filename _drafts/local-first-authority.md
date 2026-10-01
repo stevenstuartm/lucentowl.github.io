@@ -29,8 +29,6 @@ sources:
     url: "https://arxiv.org/abs/0909.1788"
   - title: "Balegas et al.: Extending Eventually Consistent Cloud Databases for Enforcing Numeric Invariants (SRDS 2015)"
     url: "https://arxiv.org/abs/1503.09052"
-  - title: "Replication and Consistency"
-    url: "/study-guides/data/replication-and-consistency.html"
 ---
 
 Local-first gives users their data. It takes away your only place to say no.
@@ -77,7 +75,7 @@ The rows that fail share a shape. Each is a rule about something scarce, like a 
 
 It's tempting to treat the failing rows as an engineering gap that a cleverer sync engine will close. Bailis's Theorem 1 says otherwise. Invariant confluence is a "necessary and sufficient condition for invariant-preserving, coordination-free execution." If a rule fails the test, then "no possible implementation" can keep the rule, stay available on every replica, and converge without coordinating. Something has to ask, before the write commits, whether another replica already spent what this one is about to spend.
 
-The result applies to any multi-leader system, and the site's Replication and Consistency guide describes offline-capable apps as exactly that, with each device acting as a leader that syncs when it reconnects.
+The result applies to any multi-leader system, and an offline-capable app is exactly that, since each device accepts writes as a leader and syncs when it reconnects.
 
 ## How Sync Engines Put the Authority Back
 

@@ -9,16 +9,12 @@ sources:
     url: "https://builder.aws.com/content/3Eupj3d2bo4fEvlzYbICMZNhQ3B/fairness-in-multi-tenant-systems"
   - title: "AWS Well-Architected Framework: SaaS Lens"
     url: "https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html"
-  - title: "Multi-Tenant Architecture"
-    url: "/study-guides/architecture/multi-tenant-architecture.html"
+  - title: "Microsoft Learn: Rate limiting middleware in ASP.NET Core"
+    url: "https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit"
   - title: "David Yanacek: Avoiding Insurmountable Queue Backlogs (Amazon Builders' Library)"
     url: "https://builder.aws.com/content/3EuRcgkTP1MI0c7zM8W6HL3WIqA/avoiding-insurmountable-queue-backlogs"
-  - title: "Rate Limiting and Request Timeouts"
-    url: "/study-guides/dotnet/asp/aspnet-rate-limiting-resilience.html"
   - title: "Colm MacCárthaigh: Workload Isolation Using Shuffle-Sharding (Amazon Builders' Library)"
     url: "https://builder.aws.com/content/3F06NpJ8YeoIGP8VHTw4n81pFn8/workload-isolation-using-shuffle-sharding"
-  - title: "Performance and Scalability Patterns"
-    url: "/study-guides/architecture/performance_scalability_patterns.html"
 ---
 
 You isolated every tenant's data. Their traffic still shares one queue.
@@ -43,7 +39,7 @@ A capacity problem caused by one tenant shows up as latency for all of them. Das
 
 ## The Front Door Limit Isn't the Boundary
 
-The usual first step is a per-tenant rate limit at the API edge. The SaaS Lens shows it with API Gateway usage plans, one per tier, and the site's Multi-Tenant Architecture guide shows the same thing in ASP.NET Core with a limiter partitioned by tenant ID. It's the right first step. But a request limit bounds how often a tenant can knock, not how much work it can cause once it's inside, and the contention points in most pooled systems sit behind the edge.
+The usual first step is a per-tenant rate limit at the API edge. The SaaS Lens shows it with API Gateway usage plans, one per tier, and ASP.NET Core's rate limiting middleware does the same thing with a limiter partitioned by tenant ID. It's the right first step. But a request limit bounds how often a tenant can knock, not how much work it can cause once it's inside, and the contention points in most pooled systems sit behind the edge.
 
 ### Rate Limits Count Requests, Not Cost
 
@@ -88,7 +84,7 @@ public sealed class ImportConsumer(IImportQueue queue, IOrderImporter importer)
 }
 ```
 
-With `QueueLimit` at zero, a tenant at its limit gets an unacquired lease immediately rather than waiting, so its excess messages are dequeued and set aside cheaply, and the workers move on to other tenants' messages. The spillover queue drains when the main queue has room. The limiter is in memory, so each consumer instance enforces its own four, and a tenant's share of the fleet scales with the instance count. The site's Rate Limiting and Request Timeouts guide covers the limiter types, and how to enforce a limit across instances when it has to be exact.
+With `QueueLimit` at zero, a tenant at its limit gets an unacquired lease immediately rather than waiting, so its excess messages are dequeued and set aside cheaply, and the workers move on to other tenants' messages. The spillover queue drains when the main queue has room. The limiter is in memory, so each consumer instance enforces its own four, and a tenant's share of the fleet scales with the instance count.
 
 ## Placement Decides Who Shares the Damage
 
@@ -96,7 +92,7 @@ Limits bound how much capacity a tenant can use. They don't help when a single r
 
 Colm MacCárthaigh's Builders' Library article on shuffle sharding answers it with an example of eight workers. Split them into four shards of two, and a customer whose requests break their shard takes down the other customers on it, a quarter of the service. Instead, give each customer its own pair of workers chosen from all eight. There are 28 possible pairs, so a problem customer affects about 1/28th of the service, and a customer who shares one worker with it still has the other. Route 53 applies the same idea with 2,048 virtual name servers and four per customer, for about 730 billion possible combinations. The technique has a condition. Clients have to tolerate one failed worker, typically by retrying against the other.
 
-Most SaaS systems don't need combinatorial placement, but they do need placement to be a decision they can change. Deployment stamps, sharded databases, and tier-based pools all bound how many tenants share each failure. At the far end, a silo tenant with its own deployment needs no per-tenant limit on resources it doesn't share, and a system with a handful of tenants can give each one its own queue. The argument applies to whatever is pooled. The site's Performance and Scalability Patterns guide treats a heavy tenant as a hot spot, one key drawing a disproportionate share of traffic that an even hash can't spread. A tenant catalog that maps each tenant to its shard or stamp is what makes moving that tenant routine rather than a migration project.
+Most SaaS systems don't need combinatorial placement, but they do need placement to be a decision they can change. Deployment stamps, sharded databases, and tier-based pools all bound how many tenants share each failure. At the far end, a silo tenant with its own deployment needs no per-tenant limit on resources it doesn't share, and a system with a handful of tenants can give each one its own queue. The argument applies to whatever is pooled. A heavy tenant is a hot spot, one key drawing a disproportionate share of traffic that an even hash can't spread. A tenant catalog that maps each tenant to its shard or stamp is what makes moving that tenant routine rather than a migration project.
 
 ## A Quota Doesn't Have to Waste Capacity
 

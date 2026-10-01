@@ -26,7 +26,7 @@ Once you pull that thread, it unravels fast. The web platform's capability surfa
 <p>The web can do the job. One company made sure you'd never trust it to.</p>
 </blockquote>
 
-This isn't an argument that native apps are obsolete or that local executables should disappear. There are good reasons to run code on your own hardware, and the pure thin-client terminal hasn't arrived yet; maybe it shouldn't. But when teams default to native without questioning it, they accept costs and constraints on the client side that the backend abandoned years ago.
+This isn't an argument that native apps are obsolete or that local executables should disappear. There are good reasons to run code on your own hardware, and the pure thin-client terminal hasn't arrived yet. Maybe it shouldn't. But when teams default to native without questioning it, they accept costs and constraints on the client side that the backend abandoned years ago.
 
 ## What the Web Platform Can Actually Do
 
@@ -83,7 +83,7 @@ I write .NET code for a living and I choose to do it on a Mac because the experi
 
 Apple's products deserve their loyalty. The Mac is excellent, the ecosystem integration is seamless, and users trust the brand for good reasons. That trust is exactly what makes the constraint so effective. When a company makes products this good, people don't scrutinize the walls. They assume the walls exist for good reasons.
 
-But look at what Apple controls versus what they build. Siri has been outperformed by competitors for over a decade, and it doesn't matter because Siri doesn't need to be good; it needs to be on the iPhone. Owning the screen means you don't have to be the best at anything that runs on it; you just need to be good enough at the thing people hold, and everything else flows through you.
+But look at what Apple controls versus what they build. Siri has been outperformed by competitors for over a decade, and it doesn't matter because Siri doesn't need to be good; it needs to be on the iPhone. Owning the screen means you don't have to be the best at anything that runs on it. You just need to be good enough at the thing people hold, and everything else flows through you.
 
 <blockquote class="pull-quote">
 <p>Apple doesn't compete on technology. They compete on constraint ownership. The phone is the aperture, and Apple controls the aperture.</p>
@@ -111,7 +111,7 @@ Android doesn't have these restrictions. Chrome supports the full suite of web A
 
 The most common justification for building native apps is market data, like eMarketer's, showing that users spend 88-92% of their mobile time in apps and only 8-12% in browsers. The data seems decisive.
 
-But this is a post-hoc fallacy dressed up as market research. Of course the native experience retains users better; it received a fraction of the investment. Of course users spend more time in apps; they were never given an equivalent web alternative. Native gets the discovery mechanisms, the design talent, and the push notification support. Web gets a fraction of the budget and is treated as a fallback. You cannot measure user preference when one option was deliberately hobbled by the platform owner and underfunded by the developer.
+But this is a post-hoc fallacy dressed up as market research. Of course the native experience retains users better. It received a fraction of the investment. Of course users spend more time in apps. They were never given an equivalent web alternative. Native gets the discovery mechanisms, the design talent, and the push notification support. Web gets a fraction of the budget and is treated as a fallback. You cannot measure user preference when one option was deliberately hobbled by the platform owner and underfunded by the developer.
 
 The developer survey data has the same circularity. Flutter and React Native adoption is growing, but these frameworks exist because Apple won't let the web do what it already does on every other platform. A developer checks iOS web capabilities, finds background sync missing and Bluetooth unavailable, builds native instead, and that decision gets counted as evidence that the web isn't ready. The constraint creates the behavior that justifies the constraint.
 
@@ -123,7 +123,7 @@ The few times the counterfactual has been tested, the results are telling. The F
 
 When the iPhone launched in 2007, Steve Jobs told developers to build web apps. The web genuinely wasn't ready, and the App Store arrived a year later. But the response to that gap matters more than the gap itself. Rather than rallying behind closing it, the industry built an entirely parallel native ecosystem. This follows a pattern that has repeated since the 1960s: every generation of computing produces a viable thin-client model, and every generation finds reasons to reject it. Mainframe terminals gave way to PCs. Sun's network computer was technically sound and commercially dead. Chromebooks were dismissed as laptops that couldn't work offline, even as every application was migrating to the browser. The anxiety is always the same: if computation lives somewhere else, you lose control. Companies that profit from local-first computing have always been happy to amplify that fear.
 
-The backend already completed the thin-client transition. Cloud won decisively; nobody serious argues for on-premises-first anymore. But the frontend is frozen at the same conceptual barrier that existed when the first PC replaced the first terminal. We accepted that our servers are someone else's computers. We haven't accepted that our applications could be someone else's rendering.
+The backend already completed the thin-client transition. Cloud won decisively, and nobody serious argues for on-premises-first anymore. But the frontend is frozen at the same conceptual barrier that existed when the first PC replaced the first terminal. We accepted that our servers are someone else's computers. We haven't accepted that our applications could be someone else's rendering.
 
 Mobile is also the reason the web became capable enough to challenge native at all. Service workers, WebGL, touch APIs, and WebAssembly weren't inevitable. They were a competitive response to native threatening to make the web irrelevant. The ecosystem that pressured the web into becoming a genuine application platform is now the same ecosystem preventing it from being used as one.
 

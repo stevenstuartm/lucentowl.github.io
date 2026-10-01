@@ -5,9 +5,6 @@ date: 2025-11-17
 description: "Sprints organize around time intervals. Shaped Kanban organizes around completing features with clear boundaries and circuit breakers to bound risk. Work flows at its natural pace within disciplined constraints."
 tags: [agile, kanban, shapeup, aaa-cycle, sdlc]
 author: steven-stuart
-sources:
-  - title: "AAA Cycle: Align-Agree-Apply"
-    url: "/study-guides/sdlc/aaa-cycle.html"
 ---
 
 As an architect, a core part of my job is assessing viability and risk before committing a team to building something. That means understanding the problem deeply, testing critical assumptions early, and knowing when to change course. Sprint-based development fights me on every one of these. Planning ceremonies reward estimation speed over depth, sprint commitments pressure teams forward regardless of what they discover, and customer needs get filtered through velocity charts that measure team activity rather than delivered value.
@@ -28,7 +25,7 @@ When discovery changes understanding mid-interval, teams are forced to ship inco
 
 ### Different Teams, Forced Cadence
 
-Different team types operate on different natural cadences. Feature teams might deliver every few days while platform teams deliver every few months, yet organizations force synchronization through universal sprint cadences. Timeboxes also conflate three concerns that should be independent: development cycles, deployment cycles, and feedback cycles. Each operates at its own natural frequency; sprints force artificial alignment across all three, stretching fast work to fill the interval and fragmenting slow work across multiple cycles.
+Different team types operate on different natural cadences. Feature teams might deliver every few days while platform teams deliver every few months, yet organizations force synchronization through universal sprint cadences. Timeboxes also conflate three concerns that should be independent: development cycles, deployment cycles, and feedback cycles. Each operates at its own natural frequency. Sprints force artificial alignment across all three, stretching fast work to fill the interval and fragmenting slow work across multiple cycles.
 
 ### Ceremony Fuels Continuation Bias
 
@@ -92,7 +89,7 @@ Temporal boundaries are feature-specific time limits: a simple CRUD screen might
 
 Assumption boundaries trigger when testing reveals the work is unviable. Critical assumptions defined during shaping get tested during implementation. If testing proves an assumption wrong and requires massive realignment, the circuit breaker trips and the work moves to Failed status for potential reshaping or Dropped status if unworkable.
 
-When either boundary is hit, you stop and reassess: adjust scope, extend with stakeholder agreement, reshape based on what you learned, or drop the work. Per-feature boundaries make failure localized; one feature can trip its circuit breaker while others continue flowing. In a uniform sprint, stopping mid-cycle puts the whole team's commitment in question, creating social pressure to keep going regardless of what you've learned.
+When either boundary is hit, you stop and reassess: adjust scope, extend with stakeholder agreement, reshape based on what you learned, or drop the work. Per-feature boundaries make failure localized. One feature can trip its circuit breaker while others continue flowing. In a uniform sprint, stopping mid-cycle puts the whole team's commitment in question, creating social pressure to keep going regardless of what you've learned.
 
 ### 4. Kanban Flow
 
@@ -130,7 +127,7 @@ Cross-team coordination in Scaled Scrum typically flows through the Scrum of Scr
 
 Scrum's rigidity also produces a predictable breakdown at scale: a small number of individuals, usually dev leads or architects, silently absorb all the cross-team coordination the process doesn't account for. They become the informal connective tissue holding the program together while everyone else follows the sprint. Shaped Kanban makes that coordination explicit from the start rather than hiding it inside ceremonies that can't actually handle it.
 
-The genuine challenge is visibility. Shaped Kanban at scale requires roadmaps that are explicit about dependencies between epics and features; you cannot hide behind sprint abstractions and hope the pieces fit together. That rigor is demanding, but it also creates the conditions for async, purpose-driven coordination instead of forced synchronization at sprint boundaries.
+The genuine challenge is visibility. Shaped Kanban at scale requires roadmaps that are explicit about dependencies between epics and features. You cannot hide behind sprint abstractions and hope the pieces fit together. That rigor is demanding, but it also creates the conditions for async, purpose-driven coordination instead of forced synchronization at sprint boundaries.
 
 ## How This Approach Can Fail
 

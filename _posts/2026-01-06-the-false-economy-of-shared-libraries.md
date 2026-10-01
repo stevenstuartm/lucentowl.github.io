@@ -96,7 +96,7 @@ An obvious question: if shared libraries are a problem in distributed systems, w
 
 Wherever different teams own different domains, yes. In a modular monolith, shared packages between domains still couple teams to the same change cycles. The difference is severity. In a monolith, the blast radius is contained: teams share a deployable and version conflicts manifest as build errors rather than runtime failures. That pain is contained but manageable. In a distributed system, that same coupling spans deployment pipelines, release cadences, and versioning strategies. A change that would have been a merge conflict in a monolith becomes a multi-team coordination effort with blocked releases and stale dependencies.
 
-Layered architectures sidestep this by design because layers already enforce separation; sharing across layers is a violation of the architecture itself, not a shared library problem. But in domain-oriented architectures, the discipline matters regardless of deployment topology. If Domain A and Domain B need to evolve independently, coupling them through shared implementation undermines that independence whether they're projects in the same solution or services in different repositories.
+Layered architectures sidestep this by design because layers already enforce separation. Sharing across layers is a violation of the architecture itself, not a shared library problem. But in domain-oriented architectures, the discipline matters regardless of deployment topology. If Domain A and Domain B need to evolve independently, coupling them through shared implementation undermines that independence whether they're projects in the same solution or services in different repositories.
 
 ## No Architecture Style Wants This
 
@@ -128,7 +128,7 @@ The pitch sounds reasonable: "We'll publish a client library so consumers don't 
 
 **Every consumer has different needs.** Service A might need three fields from one endpoint. Service B might need ten fields from a different endpoint. Service C might need to call the same endpoint but transform the response differently. When you force everyone to use your client library, you're imposing your view of how your API should be consumed. But consumers know their own needs better than you do.
 
-**Client libraries impose one team's operational policy on every consumer.** Teams building client libraries inevitably add caching strategies, retry policies, circuit breakers, and connection pooling configurations. Those decisions belong to the calling service, which is the only one that knows its own latency budget, its failure tolerance, and what a stale read costs its domain. The producer knows none of that.
+**Client libraries impose one team's operational policy on every consumer.** Teams building client libraries inevitably add caching strategies, retry policies, circuit breakers, and connection pooling configurations. Those decisions belong to the calling service, which is the only one that knows its own latency budget, its failure tolerance, and how much damage a stale read does in its domain. The producer knows none of that.
 
 A client library freezes those choices upstream, where changing them requires a coordinated release across every consumer. The library author predicts traffic patterns and failures as if every consumer will behave identically. They won't.
 

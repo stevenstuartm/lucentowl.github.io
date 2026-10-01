@@ -17,7 +17,7 @@ Recognizing this pattern helps you spot unhealthy organizations before they dama
 
 ## Personal Goals as Organizational Control
 
-Organizations often mandate "personal development goals" aligned with company objectives. This sounds reasonable; who opposes professional growth?
+Organizations often mandate "personal development goals" aligned with company objectives. This sounds reasonable. Who opposes professional growth?
 
 Forced personal goals often serve different purposes. When leadership lacks a coherent vision, they push goal-setting down to individuals. Employees must create their own direction because leadership hasn't provided one. When projects fail or strategy shifts, employees who "chose the wrong goals" can be blamed rather than leadership who failed to provide clear direction.
 

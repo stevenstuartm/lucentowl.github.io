@@ -9,24 +9,20 @@ sources:
     url: "https://aws.amazon.com/blogs/devops/how-to-migrate-your-aws-codecommit-repository-to-another-git-provider/"
   - title: "AWS: The Future of AWS CodeCommit (2025)"
     url: "https://aws.amazon.com/blogs/devops/aws-codecommit-returns-to-general-availability"
-  - title: "Total Cost of Ownership (TCO)"
-    url: "/study-guides/architecture/total-cost-of-ownership.html"
   - title: "Amazon EKS User Guide: Understand the Kubernetes version lifecycle on EKS"
     url: "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html"
   - title: "Amazon EKS Pricing"
     url: "https://aws.amazon.com/eks/pricing/"
   - title: "Kubernetes Releases"
     url: "https://kubernetes.io/releases/"
-  - title: "When Someone Else's Problem Becomes Your Solution (case study)"
-    url: "/case-studies/kubernetes-to-ecs-migration.html"
   - title: "Jeff Barr: New AWS Public IPv4 Address Charge (AWS News Blog, 2023)"
     url: "https://aws.amazon.com/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/"
   - title: "AWS Customer Agreement"
     url: "https://aws.amazon.com/agreement/"
   - title: "Google Cloud Platform Terms of Service"
     url: "https://cloud.google.com/terms"
-  - title: "When Real-Time Push Needs Product Context (case study)"
-    url: "/case-studies/realtime-push-signalr.html"
+  - title: "Amazon API Gateway Pricing"
+    url: "https://aws.amazon.com/api-gateway/pricing/"
   - title: "HashiCorp adopts Business Source License (2023)"
     url: "https://www.hashicorp.com/blog/hashicorp-adopts-business-source-license"
   - title: "Redis Adopts Dual Source-Available Licensing (2024)"
@@ -45,10 +41,12 @@ sources:
     url: "https://www.linuxfoundation.org/press/linux-foundation-launches-open-source-valkey-community"
   - title: "Linux Foundation: Announcing OpenTofu (2023)"
     url: "https://www.linuxfoundation.org/press/announcing-opentofu"
+  - title: "OpenTofu 1.7.0 is out with State Encryption (2024)"
+    url: "https://opentofu.org/blog/opentofu-1-7-0/"
+  - title: "Google Cloud Infrastructure Manager: Terraform version management policy"
+    url: "https://docs.cloud.google.com/infrastructure-manager/docs/terraform-version-deprecation"
   - title: "AWS: Introducing OpenSearch (2021)"
     url: "https://aws.amazon.com/blogs/opensource/introducing-opensearch/"
-  - title: "Choosing an Infrastructure as Code Tool"
-    url: "/study-guides/infrastructure/iac-tools-comparison.html"
 ---
 
 In July 2024, AWS closed CodeCommit, its managed Git service, to new customers and published a guide to migrating repositories to another Git provider. Teams read the signal and planned their exits. In November 2025, AWS returned CodeCommit to full general availability. "If you invested time and resources planning or executing a migration away from CodeCommit, we apologize," the announcement said.
@@ -59,7 +57,7 @@ Every managed service is a decision you've rented. Read the lease. Buy vs build 
 
 ## Buy vs Build Prices Cost, Not Control
 
-The standard build-vs-buy comparison is a cost estimate. The site's Total Cost of Ownership guide lays out the usual factors, where building costs a team for the system's whole life and buying costs fees plus integration. Its comparison table also records what buying gives up. Under buying, change "follows the vendor's roadmap and release schedule," and the risks are "vendor viability, price increases, and lock-in."
+The standard build-vs-buy comparison is a cost estimate. Building costs a team for the system's whole life, and buying costs fees plus integration. The comparison usually notes what buying gives up as well, with change following the vendor's roadmap and release schedule and risks like vendor viability, price increases, and lock-in.
 
 Both entries name consequences. Neither names what the team handed over to make them possible, which is the right to decide. Lock-in is the cost of leaving, and it's the risk teams price. Before a team ever decides to leave, the owner makes decisions the team can only react to, and each one costs the team something even when it stays. The cost of those reactions is hard to estimate because the owner, not the team, decides when they arrive.
 
@@ -69,13 +67,13 @@ Both entries name consequences. Neither names what the team handed over to make 
 
 Amazon EKS publishes its Kubernetes version lifecycle. Each minor version gets 14 months of standard support, then 12 months of extended support "at an additional cost per cluster hour." EKS pricing puts that at $0.60 per cluster per hour against $0.10 in standard support, six times the control plane fee. At the end of extended support the cluster is upgraded for the team. The EKS documentation says that "automatic updates can happen at any time after the end of extended support date. You won't receive any notification before the update," and a cluster upgraded that way cannot be rolled back.
 
-A team running EKS chooses when to upgrade only inside a window AWS sets, and it pays more for each month it stays behind. The site's case study on moving from Kubernetes to ECS Fargate records what that cadence cost one small team, with upgrade cycles that each took a full week of research and testing. The Kubernetes project gives each minor release about a year of patch support, so a self-hosted cluster faces a similar cadence. What the managed service adds is the owner's enforcement, a surcharge for waiting and an upgrade the team didn't schedule.
+A team running EKS chooses when to upgrade only inside a window AWS sets, and it pays more for each month it stays behind. On a small team where I ran EKS, each minor-version upgrade took a full week of research and testing. The Kubernetes project gives each minor release about a year of patch support, so a self-hosted cluster faces a similar cadence. What the managed service adds is the owner's enforcement, a surcharge for waiting and an upgrade the team didn't schedule.
 
 ### A Price Change Needs Only Notice
 
 In July 2023, AWS announced a charge of $0.005 per hour "for all public IPv4 addresses, whether attached to a service or not," starting February 1, 2024. Before then, AWS charged only for idle addresses and extra addresses on an instance, so most public addresses in use cost nothing. Jeff Barr's announcement gave AWS's reason, that the cost of acquiring an IPv4 address "has risen more than 300% over the past 5 years." That's a sound reason, but the decision to pass the cost on, and when, was AWS's.
 
-The contracts say this plainly. Section 3.1 of the AWS Customer Agreement says, "We may increase or add new fees and charges for any existing Services you are using by giving you at least 30 days' prior notice." The Google Cloud terms say that "Google may change the Fees at any time unless otherwise expressly agreed in an addendum or Order Form." Usage-based pricing moves the same authority in a quieter way. The site's case study on a SignalR push service notes that managed real-time services charge per connection and per message, so the vendor's price model decides which of a team's designs are affordable.
+The contracts say this plainly. Section 3.1 of the AWS Customer Agreement says, "We may increase or add new fees and charges for any existing Services you are using by giving you at least 30 days' prior notice." The Google Cloud terms say that "Google may change the Fees at any time unless otherwise expressly agreed in an addendum or Order Form." Usage-based pricing moves the same authority in a quieter way. Amazon API Gateway bills WebSocket APIs for every message sent and received and for every connection minute, so the vendor's price model decides which of a team's designs are affordable.
 
 ### The Owner Writes the Next Version's License
 
@@ -107,7 +105,7 @@ These forks exist because the relicensing threatened the business of companies l
 
 ### A Fork Is a New Owner
 
-Moving to a fork is still a migration a team has to decide on, test, and pay for. The fork has its own governance, now a foundation's instead of a company's, and its own direction. The site's guide to choosing an infrastructure-as-code tool notes that OpenTofu has added features Terraform lacks and that the two "are gradually diverging." The same guide records that Google Cloud's Infrastructure Manager runs Terraform only up to 1.5.7, the last release under the open-source license. Infrastructure Manager's customers run a Terraform version fixed by a license decision made at HashiCorp, not at the provider they chose.
+Moving to a fork is still a migration a team has to decide on, test, and pay for. The fork has its own governance, now a foundation's instead of a company's, and its own direction. OpenTofu has shipped features of its own since the fork, such as the end-to-end state encryption in its 1.7 release. Google Cloud's Infrastructure Manager, meanwhile, supports Terraform only up to 1.5.7, the last release under the open-source license. Infrastructure Manager's customers run a Terraform version fixed by a license decision made at HashiCorp, not at the provider they chose.
 
 A fork restores the ecosystem's right to choose who owns the code next. A single team gets to pick between owners, but it still doesn't decide what either owner does next.
 
@@ -119,7 +117,7 @@ That makes the rights a team holds depend on what it adopted. Open code gives a 
 
 ## Every Option Rents Some Decisions
 
-Building doesn't mean owning every decision. A built system still runs on a language runtime and framework with their own support windows, and the Total Cost of Ownership guide lists "forced change" from support lifecycles as a cost of every choice. The difference between the options is how many decisions sit with someone else, and what, if anything, protects the team when that someone else acts.
+Building doesn't mean owning every decision. A built system still runs on a language runtime and framework with their own support windows, and those support lifecycles force change on every choice. The difference between the options is how many decisions sit with someone else, and what, if anything, protects the team when that someone else acts.
 
 | Adoption | When to upgrade | What to pay | Next version's license | When it ends |
 | --- | --- | --- | --- | --- |

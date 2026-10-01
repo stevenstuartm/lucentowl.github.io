@@ -9,8 +9,6 @@ sources:
     url: "https://www.cs.cmu.edu/~ckaestne/pdf/icseseip20.pdf"
   - title: "Pete Hodgson: Feature Toggles (aka Feature Flags) (martinfowler.com, 2017)"
     url: "https://martinfowler.com/articles/feature-toggles.html"
-  - title: "Testing Strategy Architecture"
-    url: "/study-guides/architecture/testing-strategy-architecture.html"
   - title: "SEC: In the Matter of Knight Capital Americas LLC (Release No. 70694, 2013)"
     url: "https://www.sec.gov/files/litigation/admin/2013/34-70694.pdf"
   - title: "Md Tajmilur Rahman, Louis-Philippe Querel, Peter C. Rigby, and Bram Adams: Feature Toggles: Practitioner Practices and a Case Study (MSR 2016)"
@@ -19,8 +17,6 @@ sources:
     url: "https://manu.sridharan.net/files/ICSE20-SEIP-Piranha.pdf"
   - title: "Xhevahire Tërnava: Feature Toggle Dynamics in Large-Scale Systems: Prevalence, Growth, Lifespan, and Benchmarking (arXiv, 2026)"
     url: "https://arxiv.org/abs/2604.15872"
-  - title: "Deployment Strategies"
-    url: "/study-guides/infrastructure/deployment-strategies.html"
   - title: "Unleash Documentation: Feature flags"
     url: "https://docs.getunleash.io/reference/feature-toggles"
   - title: "Eduardo Smil Prutchi, Heleno de Souza Campos Junior, and Leonardo Gresta Paulino Murta: How the adoption of feature toggles correlates with branch merges and defects in open-source projects? (Software: Practice and Experience)"
@@ -43,7 +39,7 @@ While a flag is rolling out, both of its paths are live. Some users get the new 
 
 Meinicke, Wong, Vasilescu, and Kästner interviewed nine feature-flag experts for their 2020 study comparing feature flags with configuration options. They found that the common practice is to run the specific configurations about to be deployed through continuous integration, "while not performing any tests on any other configurations." None of the practitioners they spoke to tried to cover the whole configuration space. They regarded it as too expensive. Bugs in untested combinations, the authors note, "may remain undetected until an affected configuration is actually needed."
 
-That's a sensible trade while a flag is young, because the deployed configurations change as the rollout moves and both states get exercised. It stops being sensible once the flag has been at 100 percent for months, because the configuration CI tests is now only the one in production. Pete Hodgson's article on feature toggles, published on Martin Fowler's site, recommends testing the production configuration plus the fallback with the new toggles off. That advice covers toggles being released. A toggle released long ago has no fallback anyone plans to use, so its off path drops out of the test plan without anyone deciding to drop it. The site's Testing Strategy Architecture guide makes the same point from the testing side, noting that each rollout flag left behind doubles the code paths that need testing.
+That's a sensible trade while a flag is young, because the deployed configurations change as the rollout moves and both states get exercised. It stops being sensible once the flag has been at 100 percent for months, because the configuration CI tests is now only the one in production. Pete Hodgson's article on feature toggles, published on Martin Fowler's site, recommends testing the production configuration plus the fallback with the new toggles off. That advice covers toggles being released. A toggle released long ago has no fallback anyone plans to use, so its off path drops out of the test plan without anyone deciding to drop it. Each rollout flag left behind also doubles the code paths a complete test plan would have to cover.
 
 The code on that path still changes, though. Refactors, library upgrades, and schema changes touch it along with everything else, and unless some test pins the flag off, nothing checks them against the configuration nobody runs.
 
@@ -85,7 +81,7 @@ The moment a flag is created is the one moment when the person adding it knows w
 
 Meinicke's team draws the line between flags and configuration options by lifetime. Configuration options "are usually intended to be permanent whereas feature flags are intended to be temporary," and they cite evidence that options are "often added but almost never removed." Technically, the two are the same thing, a value outside the code that picks a branch inside it. A flag nobody removes has crossed that line and become a configuration option, without anyone deciding it should be one or testing it as one.
 
-Some flags belong on the permanent side from the start. A kill switch that lets operators turn off an expensive feature under load, or a permission flag that enables a feature for a premium tier, is configuration in the ordinary sense. Hodgson's catalog of toggle types, which the site's Deployment Strategies guide summarizes, separates these long-lived kinds from release and experiment toggles expected to last days or weeks. Unleash, an open-source flag service, builds the split into the product: release and experiment flags get an expected lifetime of 40 days, kill switch and permission flags are marked permanent, and Unleash marks a flag "potentially stale" once it passes its expected lifetime.
+Some flags belong on the permanent side from the start. A kill switch that lets operators turn off an expensive feature under load, or a permission flag that enables a feature for a premium tier, is configuration in the ordinary sense. Hodgson's catalog of toggle types separates these long-lived kinds from release and experiment toggles expected to last days or weeks. Unleash, an open-source flag service, builds the split into the product: release and experiment flags get an expected lifetime of 40 days, kill switch and permission flags are marked permanent, and Unleash marks a flag "potentially stale" once it passes its expected lifetime.
 
 A permanent flag isn't the problem. A flag that drifted into permanence is. Every flag should land in one of two states, chosen when it's created and revisited when it's done.
 

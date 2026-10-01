@@ -27,10 +27,8 @@ sources:
     url: "https://www.infoq.com/news/2020/05/microsoft-project-reunion/"
   - title: "Windows App SDK 1.1 release notes (Microsoft Learn)"
     url: "https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-1-1"
-  - title: "WinUI 3 Packaging and Deployment"
-    url: "/study-guides/dotnet/winui/winui-packaging-and-deployment.html"
-  - title: "WinUI 3 Migration from WPF and UWP"
-    url: "/study-guides/dotnet/winui/winui-migration-wpf-uwp.html"
+  - title: "Migrate WPF app patterns to WinUI 3 (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/wpf-patterns-winui3"
   - title: "What's supported when migrating from UWP to WinUI 3 (Microsoft Learn)"
     url: "https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/what-is-supported"
   - title: "\"Ohh...WinUI3 is really dead!\" (microsoft-ui-xaml GitHub discussion #9417, 2024)"
@@ -91,17 +89,17 @@ The failures look circumstantial one at a time, since nobody at Microsoft planne
 
 Microsoft announced Project Reunion at Build 2020, and its goal, as InfoQ summarized it, reads as a direct answer to the table above. It would decouple the Windows UI stack from the operating system and ship it through NuGet to ordinary Win32 desktop apps. WinUI 3 reached version 1.0 in November 2021 as part of the Windows App SDK.
 
-A WinUI 3 app runs as a full-trust desktop process unless it opts into isolation. It can install unpackaged, through the team's own MSI or setup program, and since Windows App SDK 1.1 in 2022 it can deploy self-contained, carrying its UI framework in its own folder. It runs on Windows 10 version 1809 and later, and the UI layer updates when the app does. Every decision the previous three frameworks took away is the developer's again, and the site's WinUI 3 packaging and deployment guide walks through each option.
+A WinUI 3 app runs as a full-trust desktop process unless it opts into isolation. It can install unpackaged, through the team's own MSI or setup program, and since Windows App SDK 1.1 in 2022 it can deploy self-contained, carrying its UI framework in its own folder. It runs on Windows 10 version 1809 and later, and the UI layer updates when the app does. Every decision the previous three frameworks took away is the developer's again.
 
 ### It Started From UWP, Not WPF
 
 Microsoft's FAQ is explicit that WinUI 3 "started from the WinUI for UWP codebase," and it shows. For a UWP team, WinUI 3 is a close relative, with the same XAML dialect and controls, new namespaces, and a replaced app model. For a WPF team, it's a different framework that happens to use XAML.
 
-The site's WinUI 3 migration guide lists what WPF applications lean on that WinUI 3 lacks. Style triggers and data triggers, `MultiBinding`, `{DynamicResource}`, and custom inheriting properties all need a different approach. There is no first-party `DataGrid`, the control many line-of-business screens are built around, and the Community Toolkit's version never left UWP. As of Windows App SDK 2.0, the Design tab of Visual Studio's XAML Designer doesn't support WinUI 3 projects, and Microsoft's own migration notes say WinUI 3 apps launch more slowly, use more memory, and install larger than equivalent UWP apps.
+Microsoft's guide to migrating WPF app patterns lists what WPF applications lean on that WinUI 3 handles differently. Style triggers and data triggers become attached behaviors, `MultiBinding` becomes converters or `x:Bind`, and `{DynamicResource}` becomes `{ThemeResource}`. There is no first-party `DataGrid`, the control many line-of-business screens are built around, and the guide points teams to community projects instead. The same guide says the Design tab of Visual Studio's XAML Designer doesn't support WinUI 3 projects, and Microsoft's own migration notes say WinUI 3 apps launch more slowly, use more memory, and install larger than equivalent UWP apps.
 
 WinUI 3 solved the problem that made UWP unattractive, which was lost control. It didn't solve the problem that kept WPF teams where they were, which was that their applications were built on WPF's controls, triggers, and designer.
 
-> **AUTHOR** — the author's experience goes here: the WinUI 3 rebuild of a UWP app, and which gaps it hit. If this cites the rebuild case study, add it to `sources`.
+> **AUTHOR** — the author's experience goes here: the WinUI 3 rebuild of a UWP app, and which gaps it hit. Tell it in the first person. Don't cite or name the rebuild case study.
 
 ### Trust Was Already Spent
 

@@ -21,8 +21,6 @@ sources:
     url: "https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api"
   - title: "Shopify: API rate limits"
     url: "https://shopify.dev/docs/api/usage/rate-limits"
-  - title: "API Design Architecture"
-    url: "/study-guides/architecture/api-design-architecture.html"
   - title: "Sashko Stubailo: 5 benefits of static GraphQL queries (Apollo, 2016)"
     url: "https://www.apollographql.com/blog/5-benefits-of-static-graphql-queries"
   - title: "Benjie Gillam: Trusted Documents"
@@ -35,8 +33,6 @@ sources:
     url: "https://www.apollographql.com/docs/graphos/platform/security/persisted-queries"
   - title: "Apollo Server: Automatic Persisted Queries"
     url: "https://www.apollographql.com/docs/apollo-server/performance/apq"
-  - title: "gRPC Architecture and Design"
-    url: "/study-guides/architecture/grpc-architecture-design.html"
 ---
 
 When Facebook introduced GraphQL publicly in 2015, its engineering post put the idea in one line: "The shape of the returned data is determined entirely by the client's query, so servers become simpler and easy to generalize." That was the pitch. A frontend developer could change what a screen fetched without waiting on a backend change, and the server stopped growing an endpoint per screen.
@@ -71,7 +67,7 @@ Public APIs, which can't know their callers' queries in advance, lean hardest on
 
 ### Trusted Documents Remove the Shape From Runtime
 
-The last control takes the authority back entirely. With persisted operations, the client's queries are extracted at build time, hashed, and registered with the server. In production, the client sends a hash, and the server runs only operations it already holds. This site's API design guide lists persisted queries as something to consider for first-party clients, alongside depth and cost limits. For a first-party API, the case is stronger than that, because limits and cost budgets only approximate what an allowlist enforces exactly.
+The last control takes the authority back entirely. With persisted operations, the client's queries are extracted at build time, hashed, and registered with the server. In production, the client sends a hash, and the server runs only operations it already holds. The GraphQL Foundation's security guidance recommends trusted documents for APIs that serve only first-party clients and treats depth and cost limits separately. For a first-party API, the allowlist should come first, because limits and cost budgets only approximate what an allowlist enforces exactly.
 
 It isn't a late invention. Sashko Stubailo described Facebook's practice on Apollo's blog in 2016. In development, "the server accepts any query you throw at it," on deploy the queries are saved, and in production "the server only supports the queries that have been previously stored." Benjie Gillam's write-up on trusted documents says the technique "has been used within Facebook since before GraphQL was open sourced." Relay, Facebook's GraphQL client, can persist every query at build time and send only its hash, and its documentation gives both reasons, saving upload bytes and letting the server "allowlist queries which improves security by restricting the operations that can be executed by a client." By these accounts, the team that created GraphQL didn't run its own apps the way it was pitched.
 
@@ -117,7 +113,7 @@ Once trusted documents are on, a first-party GraphQL API looks different from th
 
 ### It Works Like RPC With the Client Writing the Methods
 
-That is close to gRPC. The site's gRPC architecture guide describes its contract as `.proto` files compiled into both sides, so every call is known at build time. The difference is who writes the operation. In gRPC, the server team defines each method. With trusted documents, the client team composes each operation from the schema, and the server accepts it by registering it. A REST API changes shape when the backend team ships a new endpoint, while a first-party GraphQL API changes shape when the client team ships a new document.
+That is close to gRPC. A gRPC contract is a set of `.proto` files compiled into both sides, so every call is known at build time. The difference is who writes the operation. In gRPC, the server team defines each method. With trusted documents, the client team composes each operation from the schema, and the server accepts it by registering it. A REST API changes shape when the backend team ships a new endpoint, while a first-party GraphQL API changes shape when the client team ships a new document.
 
 What survives from the pitch is useful. A frontend team can still change what a screen fetches without a backend code change, as long as the new document ships through the pipeline. The schema is still typed end to end, with generated clients that catch mismatches at build time. And the server gains something the pitch never mentioned, an exact inventory of which fields each registered operation touches, so a deprecated field can be retired once no registered document uses it.
 

@@ -15,20 +15,16 @@ sources:
     url: "https://cdn.chriskrycho.com/file/chriskrycho-com/resources/naur1985programming.pdf"
   - title: "Joel Spolsky: Things You Should Never Do, Part I (2000)"
     url: "https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/"
-  - title: "WinUI 3 Migration from WPF and UWP"
-    url: "/study-guides/dotnet/winui/winui-migration-wpf-uwp.html"
+  - title: "Microsoft Learn: Threading functionality migration (Windows App SDK)"
+    url: "https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/guides/threading"
   - title: "G. K. Chesterton: The Thing (1929), \"The Drift from Domesticity\""
     url: "https://www.gkc.org.uk/gkc/books/The_Thing.txt"
   - title: "A. A. Terekhov and C. Verhoef: The Realities of Language Conversions (IEEE Software, 2000)"
     url: "https://www.cs.vu.nl/~x/cnv/"
   - title: "De Marco, Iancu, and Asinofsky: COBOL to Java and Newspapers Still Get Delivered (ICSME 2018)"
     url: "https://arxiv.org/abs/1808.03724"
-  - title: "Case study: rebuilding an undocumented UWP application on WinUI 3"
-    url: "/case-studies/ai-disciplined-delivery.html"
-  - title: "Legacy Modernization Strategies"
-    url: "/study-guides/architecture/legacy-modernization-strategies.html"
-  - title: "Architecture Decision-Making"
-    url: "/study-guides/leadership/architecture-decision-making.html"
+  - title: "Wikipedia: Characterization test (Michael Feathers, Working Effectively with Legacy Code)"
+    url: "https://en.wikipedia.org/wiki/Characterization_test"
 ---
 
 The port kept every line. It lost every reason.
@@ -67,7 +63,7 @@ Spolsky and Naur agree more than they seem to. The code holds what the program d
 
 ## Four Kinds of Line, and the Two a Port Can't Tell Apart
 
-Sort a codebase by what happens to each line when a tool ports it, and four kinds emerge. The UWP-to-WinUI 3 move gives a concrete case of each, because the site's WinUI migration guide documents where the two platforms differ.
+Sort a codebase by what happens to each line when a tool ports it, and four kinds emerge. The UWP-to-WinUI 3 move gives a concrete case of each, because Microsoft's migration documentation records where the two platforms differ.
 
 | Kind of line | UWP-to-WinUI 3 example | What the tool does | Who finds it, and when |
 | --- | --- | --- | --- |
@@ -80,7 +76,7 @@ Sort a codebase by what happens to each line when a tool ports it, and four kind
 
 The first kind gets all the attention, because the tool reports it. Every TODO is a known unknown with a documentation link attached, and working the list down feels like progress. It is progress, but it's the cheapest part of the migration to find.
 
-The second kind is more expensive, because nothing flags it. The WinUI migration guide notes that UWP's UI thread blocked reentrant calls and the Windows App SDK's doesn't, so code "that relied on it, often without knowing, can now re-enter a XAML control mid-operation." The dependence was never written down because the platform enforced it. The resulting crashes arrive late, and often as stowed exceptions whose stack has already unwound. But at least they arrive. Something breaks, and someone has to explain why.
+The second kind is more expensive, because nothing flags it. Microsoft's threading migration guide notes that UWP's UI thread used a threading model that blocks reentrancy and the Windows App SDK's doesn't, so a UWP app that assumed the non-reentrant behavior "might not behave as expected," with reentrancy into XAML controls the case to watch for. The dependence was never written down because the platform enforced it. The resulting crashes arrive late, and often as stowed exceptions whose stack has already unwound. But at least they arrive. Something breaks, and someone has to explain why.
 
 ### Workarounds and Rules Look the Same in the Output
 
@@ -102,17 +98,17 @@ The research on automated language conversion reached the same place from the ot
 
 A later report shows what that looks like when the conversion succeeds. Alessandro De Marco, Valentin Iancu, and Ira Asinofsky described moving a newspaper's delivery system, running since 1979, from mainframe COBOL to Java on Linux through automated translation (ICSME 2018). The team achieved "a functionally equivalent system" and ran it in production. They also reported that problems remained "related to new feature development, business domain knowledge transfer, and recruiting new software engineers to work on the modernized application." Equivalence was delivered. Everything Naur would have called theory was still owed.
 
-The site's case study on a UWP-to-WinUI 3 rebuild describes the same trade from the desktop side. Microsoft's tooling migrated project structure and some API calls, but its output broke wherever the two platforms behaved differently, and the cost of repairing it was trending toward the cost of rebuilding. A clean port would also have carried the old app's threading problems and memory leaks forward unchanged. The team kept the business and data layers, rebuilt the presentation layer, and treated the running legacy app as the behavioral specification for everything it rebuilt.
+I met the same trade on the desktop when I led the rebuild of an undocumented UWP application on WinUI 3. Microsoft's tooling migrated project structure and some API calls, but its output broke wherever the two platforms behaved differently, and the cost of repairing it was trending toward the cost of rebuilding. A clean port would also have carried the old app's threading problems and memory leaks forward unchanged. The team kept the business and data layers, rebuilt the presentation layer, and treated the running legacy app as the behavioral specification for everything it rebuilt.
 
 ## What a Port Still Owes You
 
 None of this makes a migration tool the wrong choice. It makes a finished port the start of the migration rather than the end of it. The tool's output is an inventory of behavior. What the team does next decides whether the ported system can change.
 
-**Pin the behavior before you question it.** Characterization tests record what the system does now, right or wrong. They can't recover why a workaround exists, but they turn "is it safe to remove this?" into "what breaks when I remove it?", which a team can answer without the original authors. Once the builders are gone, that's the most practical way out of Chesterton's trap. The legacy modernization guide covers characterization tests and parallel runs for this purpose.
+**Pin the behavior before you question it.** Characterization tests, Michael Feathers' name for tests written against legacy code, record what the system does now, right or wrong. They can't recover why a workaround exists, but they turn "is it safe to remove this?" into "what breaks when I remove it?", which a team can answer without the original authors. Once the builders are gone, that's the most practical way out of Chesterton's trap.
 
 **List what the old platform did that the new one doesn't.** The platform's migration notes are a map of lifted constraints and withdrawn guarantees. For UWP to WinUI 3, that list includes the sandbox, suspension, single instancing, and the reentrancy guard. Every item on it points at code that is now either unnecessary or silently wrong. Search for the code each one implies before the port ships, not after a crash report arrives.
 
-**Classify workarounds as you find them.** Each one is a platform workaround, a business rule, or an accident nobody meant. Record the classification and the evidence where the next developer will find it, next to the code or in a decision record of the kind the site's architecture decision-making guide describes. A reason rediscovered and written down is the only part of Naur's theory a team can rebuild on purpose.
+**Classify workarounds as you find them.** Each one is a platform workaround, a business rule, or an accident nobody meant. Record the classification and the evidence where the next developer will find it, next to the code or in a decision record. A reason rediscovered and written down is the only part of Naur's theory a team can rebuild on purpose.
 
 **Measure the migration by what's been explained, not what's been converted.** A port that compiles is done by the tool's standard. By the team's standard it's done when a developer can change any part of it and say what the change will affect.
 

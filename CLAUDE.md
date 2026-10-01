@@ -139,7 +139,7 @@ tags: [architecture, design-patterns]
 ---
 ```
 
-**All links go in `sources`, never the body.** Posts name each source in prose and list its URL, external or site-relative, under an optional `sources:` front matter array (`title`, `url`), rendered at the bottom by `_includes/post-sources.html`. This keeps the body link-free for syndication. See [`.claude/content/blog-post-guide.md`](.claude/content/blog-post-guide.md).
+**All links go in `sources`, never the body.** Posts name each source in prose and list its URL under an optional `sources:` front matter array (`title`, `url`), rendered at the bottom by `_includes/post-sources.html`. This keeps the body link-free for syndication. Sources are always external: a post never cites or names Lucent Owl's own guides, resources, or pages. See [`.claude/content/blog-post-guide.md`](.claude/content/blog-post-guide.md).
 
 **CRITICAL: NEVER rename files**:
 - ❌ NEVER rename blog post files (`_posts/*.md`) or any other content files

@@ -5,16 +5,12 @@ description: "A root cause names the component that broke, and that component ra
 tags: [incident-response, postmortems, reliability, decision-making, production]
 author: steven-stuart
 sources:
-  - title: "When a Trusted Dependency Becomes a Silent Killer"
-    url: "/case-studies/silent-sdk-deadlock.html"
   - title: "Site Reliability Engineering: Postmortem Culture: Learning from Failure"
     url: "https://sre.google/sre-book/postmortem-culture/"
   - title: "Site Reliability Engineering: Example Postmortem"
     url: "https://sre.google/sre-book/example-postmortem/"
   - title: "Richard I. Cook: How Complex Systems Fail"
     url: "https://how.complexsystems.fail/"
-  - title: "Incident Response and Recovery"
-    url: "/study-guides/security/incident-response-recovery.html"
   - title: "Microsoft: Helping our customers through the CrowdStrike outage"
     url: "https://blogs.microsoft.com/blog/2024/07/20/helping-our-customers-through-the-crowdstrike-outage/"
   - title: "CrowdStrike: External Technical Root Cause Analysis, Channel File 291"
@@ -29,7 +25,7 @@ sources:
     url: "https://www.etsy.com/codeascraft/blameless-postmortems"
 ---
 
-The root cause was a silent thread deadlock in the AWS SDK for .NET. That's what I wrote in the case study about the outage it caused, and it's accurate. A background credential refresh in version 4 of the SDK's core library deadlocked under concurrent load, starved the thread pool, and took our authentication service down without an exception or a log line. But the lessons at the end of that write-up aren't about the deadlock. They're about a decision to skip load testing for the one vendor we trusted, and about how I ran the investigation. The deadlock was AWS's to fix, and they fixed it. The decisions were ours, and they were the only part of the incident we could change.
+The root cause was a silent thread deadlock in the AWS SDK for .NET. That's what I recorded as the cause of the outage it led to, and it's accurate. A background credential refresh in version 4 of the SDK's core library deadlocked under concurrent load, starved the thread pool, and took our authentication service down without an exception or a log line. But the lessons I drew afterward aren't about the deadlock. They're about a decision to skip load testing for the one vendor we trusted, and about how I ran the investigation. The deadlock was AWS's to fix, and they fixed it. The decisions were ours, and they were the only part of the incident we could change.
 
 Complex-systems researchers have argued since at least the late 1990s that incidents don't have a single root cause, and widely used postmortem templates, Google's among them, still ask for one. My argument is that a postmortem should look for decisions instead: what someone chose, under what pressure, with what information, and what the choice bought. A root cause tends to name a component, and that component rarely fails the same way twice. The decisions that put it in the path of load, trust, and release keep producing incidents until someone changes them.
 
@@ -49,7 +45,7 @@ Fixing the component is necessary, since it ends this incident. What it doesn't 
 
 This doesn't mean responders should stop tracing from symptom to mechanism. During an incident, following the chain from failing requests to an exhausted thread pool to the code that blocked it is how you find what to roll back or patch. Stopping short restores service without knowing why it broke.
 
-A postmortem asks a different question. It asks why the system was arranged so that this defect could reach production and hurt this much, and a mechanism rarely answers it. The site's Incident Response and Recovery guide frames the review as finding "the conditions that allowed the incident rather than the person who clicked." A defective component is one of those conditions. The choices about testing, rollout, and dependency that let the defect matter are the rest of them.
+A postmortem asks a different question. It asks why the system was arranged so that this defect could reach production and hurt this much, and a mechanism rarely answers it. The review looks for the conditions that allowed the incident, not the person who clicked. A defective component is one of those conditions. The choices about testing, rollout, and dependency that let the defect matter are the rest of them.
 
 ## Decisions Are What Recur
 
@@ -65,13 +61,13 @@ The field count can't recur now that the sensor validates it. The decision about
 
 ### A Track Record Became a Skipped Check
 
-The reasoning in CrowdStrike's preliminary report has the same shape as the decision in my own case study. We had upgraded AWS SDK packages about 30 times without incident, and that record made them the only packages exempt from the changelog review and load testing we applied to every other dependency. In both cases a history of successful changes turned into a rule that skipped a check.
+The reasoning in CrowdStrike's preliminary report has the same shape as the decision behind my own outage. We had upgraded AWS SDK packages about 30 times without incident, and that record made them the only packages exempt from the changelog review and load testing we applied to every other dependency. In both cases a history of successful changes turned into a rule that skipped a check.
 
 Cook's tenth point is that "all practitioner actions are gambles," and that "successful outcomes are also the result of gambles," a fact he says isn't widely appreciated. A run of successful gambles is how a rule like "trusted packages skip load tests" forms. It rarely gets written down as a risk, because every result so far has confirmed it. It stays in force after the incident's defect is patched, so the next upgrade takes the same gamble.
 
 ### The SDK Outage Held More Decisions Than Its Lessons Named
 
-A decision was made at a point in time, by someone in a role, with the information and pressure they had then, and it can be made again differently. My case study contains more of them than its lessons named. The authentication service validated every request with a fresh DynamoDB read, which made it the hottest path in the system and the one the deadlock hit first. The release upgraded packages across roughly 20 APIs at once, so the rollback had to take all of them back, and that blocked a feature we had just started selling. Each was a defensible call when it was made, and each shaped how much a vendor's bug could hurt. A postmortem that records "SDK deadlock" as the root cause captures none of them.
+A decision was made at a point in time, by someone in a role, with the information and pressure they had then, and it can be made again differently. My own outage contains more of them than my lessons named. The authentication service validated every request with a fresh DynamoDB read, which made it the hottest path in the system and the one the deadlock hit first. The release upgraded packages across roughly 20 APIs at once, so the rollback had to take all of them back, and that blocked a feature we had just started selling. Each was a defensible call when it was made, and each shaped how much a vendor's bug could hurt. A postmortem that records "SDK deadlock" as the root cause captures none of them.
 
 ## Three Guards Keep a Decision Review From Becoming Blame
 

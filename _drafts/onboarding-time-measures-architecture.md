@@ -19,12 +19,10 @@ sources:
     url: "https://arxiv.org/abs/2404.18677"
   - title: "Borg, Tornhill, and Mones: U Owns the Code That Changes and How Marginal Owners Resolve Issues Slower in Low-Quality Source Code (EASE 2023)"
     url: "https://arxiv.org/abs/2304.11636"
-  - title: "Modularity & Coupling"
-    url: "/study-guides/architecture/modularity-coupling.html"
   - title: "Noda, Storey, Forsgren, and Greiler: DevEx: What Actually Drives Productivity (ACM Queue, 2023)"
     url: "https://queue.acm.org/detail.cfm?id=3595878"
-  - title: "Architecture Characteristics"
-    url: "/study-guides/architecture/architecture-characteristics.html"
+  - title: "Thoughtworks Technology Radar: Architectural fitness function"
+    url: "https://www.thoughtworks.com/radar/techniques/architectural-fitness-function"
 ---
 
 Your architecture diagram says the system is clear. Your last new hire took six weeks to ship a change that wasn't a typo fix. I think most leads would read those six weeks as a verdict on the diagram, and I wanted to know whether the research backs that reading. It mostly doesn't. The studies of developer onboarding blame documentation, access, setup, and mentoring for most of the delay, and one of them found that the time to a first change doesn't even predict how fast someone ramps up afterward.
@@ -65,7 +63,7 @@ The Microsoft studies show the same effect at the boundary between teams. Rastog
 
 ## Coupling Metrics Don't Measure Legibility
 
-Coupling metrics count dependencies. Afferent and efferent coupling, Robert Martin's instability and main sequence, and Meilir Page-Jones's connascence, all covered in the Modularity & Coupling guide, describe how components depend on each other and how far a change will spread. They're the right tools for asking how much a change will cost once you know where to make it.
+Coupling metrics count dependencies. Afferent and efferent coupling, Robert Martin's instability and main sequence, and Meilir Page-Jones's connascence describe how components depend on each other and how far a change will spread. They're the right tools for asking how much a change will cost once you know where to make it.
 
 They don't record whether you can find where to make it. A module can sit on the main sequence and still be named after a framework pattern instead of the business concept it implements. Two services can have clean, narrow interfaces and still split one concept in a way nobody would guess. Those are properties of legibility, whether the structure shows where things belong, and the first question in Sillito's list tests exactly that. The Developer Experience framework of Abi Noda, Margaret-Anne Storey, Nicole Forsgren, and Michaela Greiler (ACM Queue, 2023) names cognitive load, the mental effort required to do the work, as one of three dimensions that drive productivity. For someone new, structure that hides where things belong is a direct source of that load, and nothing in a coupling report shows it.
 
@@ -86,7 +84,7 @@ A newcomer's first few changes are an architecture review nobody scheduled, but 
 
 In the studies above, the first two rows account for most of the delay newcomers reported. Fix them first, because the fixes are cheap and well understood. The rows marked as architecture are the ones no documentation effort removes. Better docs about a concept spread across five projects still leave it spread across five projects.
 
-Keep the measurement as a question, not a target. A team told to cut time to first merge can hand every newcomer a one-line configuration change, and the number will improve while telling you nothing. The Architecture Characteristics guide describes fitness functions for the properties a team decides to protect, and legibility can be one of them. The fitness function here is a person, and it only works while that person is still unfamiliar with the code.
+Keep the measurement as a question, not a target. A team told to cut time to first merge can hand every newcomer a one-line configuration change, and the number will improve while telling you nothing. Neal Ford, Rebecca Parsons, and Patrick Kua's fitness functions, from *Building Evolutionary Architectures*, give an objective check for each architectural property a team decides to protect, and legibility can be one of them. The fitness function here is a person, and it only works while that person is still unfamiliar with the code.
 
 ## Checking Your Own Onboarding
 

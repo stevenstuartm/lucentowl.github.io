@@ -15,8 +15,6 @@ sources:
     url: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
   - title: "AWS CodeDeploy User Guide: Redeploy and roll back a deployment"
     url: "https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-rollback-and-redeploy.html"
-  - title: "Deployment Strategies"
-    url: "/study-guides/infrastructure/deployment-strategies.html"
   - title: "Martin Kleppmann: Designing Data-Intensive Applications (O'Reilly, 2017)"
     url: "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/"
   - title: "Protocol Buffers Language Guide (proto3): Consequences of Reusing Field Numbers"
@@ -29,8 +27,6 @@ sources:
     url: "https://martinfowler.com/articles/evodb.html"
   - title: "Jacqueline Xu: Online migrations at scale (Stripe, 2017)"
     url: "https://stripe.com/blog/online-migrations"
-  - title: "Deployment Strategy Comparison"
-    url: "/resources/deployment-strategy-comparison.html"
 ---
 
 On August 1, 2012, Knight Capital's order router sent millions of orders nobody intended into the market. According to the SEC's order against the firm, Knight had rolled out new code for its Retail Liquidity Program over the previous days, but one technician didn't copy it to one of the eight servers. The new code repurposed a flag that had once switched on Power Peg, a feature retired years earlier whose code was still present and callable. Orders carrying the flag reached the eighth server and ran the old code. While staff searched for the cause, Knight uninstalled the new code from the seven servers where it had deployed correctly. "This action worsened the problem," the SEC wrote, "causing additional incoming parent orders to activate the Power Peg code that was present on those servers." In about 45 minutes the router produced 4 million executions, and Knight lost more than $460 million.
@@ -43,7 +39,7 @@ A rollback reverts code, not the state the new code created. It works only when 
 
 ### The Platform Rolls Back Exactly What It Deployed
 
-Deployment tools are precise about what "rollback" means, and it is narrower than most release plans assume. The Kubernetes documentation for Deployments explains that only changes to the pod template create a revision, so "when you roll back to an earlier revision, only the Deployment's Pod template part is rolled back." AWS CodeDeploy's user guide describes a rollback as redeploying "a previously deployed revision of an application as a new deployment." Blue-green deployments switch traffic back to the old environment in seconds, but both environments usually share one database. The site's Deployment Strategies guide puts the limit in one line, "Code rolls back, but data does not," and its companion Deployment Strategy Comparison shows how each strategy's rollback depends on shared data.
+Deployment tools are precise about what "rollback" means, and it is narrower than most release plans assume. The Kubernetes documentation for Deployments explains that only changes to the pod template create a revision, so "when you roll back to an earlier revision, only the Deployment's Pod template part is rolled back." AWS CodeDeploy's user guide describes a rollback as redeploying "a previously deployed revision of an application as a new deployment." Blue-green deployments switch traffic back to the old environment in seconds, but both environments usually share one database. Code rolls back, but data does not, and every strategy's rollback depends on what the old and new versions share.
 
 None of these tools claims to undo a migration, drain a queue of messages the new version produced, or recall an app from users' phones. They restore an artifact. Everything the artifact changed outside itself stays changed.
 

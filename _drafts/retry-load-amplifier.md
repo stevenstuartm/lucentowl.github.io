@@ -19,18 +19,12 @@ sources:
     url: "https://sre.google/sre-book/addressing-cascading-failures/"
   - title: "Marc Brooker: Timeouts, retries, and backoff with jitter (Amazon Builders' Library)"
     url: "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
-  - title: "Reliability Patterns"
-    url: "/study-guides/architecture/reliability_patterns.html"
-  - title: "Rate Limiting and Request Timeouts"
-    url: "/study-guides/dotnet/asp/aspnet-rate-limiting-resilience.html"
   - title: "Site Reliability Engineering: Handling Overload"
     url: "https://sre.google/sre-book/handling-overload/"
   - title: "gRPC Guides: Retry"
     url: "https://grpc.io/docs/guides/retry/"
   - title: "gRPC Proposal A6: gRPC Retry Design"
     url: "https://github.com/grpc/proposal/blob/master/A6-client-retries.md"
-  - title: "Performance and Scalability Patterns"
-    url: "/study-guides/architecture/performance_scalability_patterns.html"
 ---
 
 The outage ended an hour ago, and your retries didn't get the memo. On October 20, 2025, AWS restored DNS for DynamoDB's us-east-1 endpoint by 2:25 AM Pacific, and by 2:40 AM clients could connect again. EC2's DropletWorkflow Manager, the system that holds a lease on every physical server behind EC2, didn't recover with it, and AWS's summary describes a retry loop. Re-establishing all those leases took long enough that the work "could not be completed before they timed out," more work was queued to try again, and the manager "entered a state of congestive collapse and was unable to make forward progress." It stayed there until 4:14 AM, when engineers throttled incoming work and restarted hosts to clear the queues, and it didn't hold leases on every server again until 5:28 AM.
@@ -67,7 +61,7 @@ Their cache example shows how teams end up there. A look-aside cache with a 90% 
 
 In .NET, `AddStandardResilienceHandler()` gives an `HttpClient` a retry strategy that, according to Microsoft's documentation on building resilient HTTP apps, retries up to three times with exponential backoff and jitter, on any status of 500 or above, 408, or 429, for every HTTP method. The AWS SDKs reference guide sets the default at three attempts for most services, and four for DynamoDB. Both are sensible defaults for one caller, and both are set per client.
 
-Put the standard handler on three hops in a row, and one user action that keeps failing can reach the bottom service four times per attempt at each hop. That's 4 × 4 × 4, or 64 attempts, which is the same figure Google's SRE book uses in its chapter on addressing cascading failures, with retries at the JavaScript, frontend, and backend layers. Marc Brooker's Amazon Builders' Library article on timeouts and retries runs the same arithmetic on a five-deep stack with three tries at each layer and gets 243 times the load on the database, "making it unlikely to ever recover." The standard handler also includes a circuit breaker that opens when 10% of at least 100 calls in 30 seconds fail, which cuts that worst case short. But each breaker judges only its own instance's traffic, and it lets a trial call through five seconds after it opens. The site's Reliability Patterns guide works through the same multiplication and how the retry, breaker, and timeout layers stack.
+Put the standard handler on three hops in a row, and one user action that keeps failing can reach the bottom service four times per attempt at each hop. That's 4 × 4 × 4, or 64 attempts, which is the same figure Google's SRE book uses in its chapter on addressing cascading failures, with retries at the JavaScript, frontend, and backend layers. Marc Brooker's Amazon Builders' Library article on timeouts and retries runs the same arithmetic on a five-deep stack with three tries at each layer and gets 243 times the load on the database, "making it unlikely to ever recover." The standard handler also includes a circuit breaker that opens when 10% of at least 100 calls in 30 seconds fail, which cuts that worst case short. But each breaker judges only its own instance's traffic, and it lets a trial call through five seconds after it opens.
 
 Brooker gives the underlying trade its plainest name. "Retries are 'selfish.' In other words, when a client retries, it spends more of the server's time to get a higher chance of success." When failures are rare, the trade works. When failures come from overload, retries "can even delay recovery by keeping the load high long after the original issue is resolved."
 
@@ -75,7 +69,7 @@ Brooker gives the underlying trade its plainest name. "Retries are 'selfish.' In
 
 A retry starts when a timeout expires, so the timeout sets how fast the loop spins up. Huang and colleagues found that a short timeout is good for latency on small transient issues but "can hurt the system's ability to handle larger problems by quickly starting the workload amplification." AWS's 2014 SimpleDB outage listed a short handshake timeout as a contributing factor to starting and sustaining the overload. In Huang's cache experiment, raising the request timeout from one second to two made the system less vulnerable at every load level tested.
 
-A timeout also abandons work without stopping it. When a caller gives up and retries, the server may still be running the first attempt, so the retry adds new work while the old work finishes for nobody. The site's Rate Limiting and Request Timeouts guide for ASP.NET Core covers the fix on the server side, which is passing the request's cancellation token through to every query and outbound call.
+A timeout also abandons work without stopping it. When a caller gives up and retries, the server may still be running the first attempt, so the retry adds new work while the old work finishes for nobody. The fix on the server side is passing the request's cancellation token through to every query and outbound call, so abandoned work stops with its caller.
 
 The look-aside cache fails the same way from the other direction. The application is responsible for filling the cache, but when the database slows past the application's timeout, the application gives up before it gets a result to store. The hit rate stays low, the database stays overloaded, and in Bronson's words, "losing a cache with a 90% hit-rate causes a 10× query amplification."
 
@@ -148,7 +142,7 @@ HTTP's nearest equivalent is `Retry-After` on a `429` or `503`, and the standard
 
 ### Cache Fills Belong to the Cache
 
-The look-aside cache has an authority problem of its own. The component responsible for filling the cache, the application, is the one that gives up first. Bronson and colleagues observe that prioritizing cache fills over serving clients during overload "is unenforceable with a look-aside cache but trivial with a read-through cache." A read-through cache can wait longer on the database than the application does, so even after the application gives up, the result still lands in the cache and the hit rate climbs until the system recovers. The fix moves responsibility for the fill to the component that keeps running. As they put it, "the software structure encodes implicit priorities." The site's Performance and Scalability Patterns guide compares cache-aside with read-through caching and covers the stampede that follows a mass expiry.
+The look-aside cache has an authority problem of its own. The component responsible for filling the cache, the application, is the one that gives up first. Bronson and colleagues observe that prioritizing cache fills over serving clients during overload "is unenforceable with a look-aside cache but trivial with a read-through cache." A read-through cache can wait longer on the database than the application does, so even after the application gives up, the result still lands in the cache and the hit rate climbs until the system recovers. The fix moves responsibility for the fill to the component that keeps running. As they put it, "the software structure encodes implicit priorities."
 
 ## Checking Your Own Call Path
 

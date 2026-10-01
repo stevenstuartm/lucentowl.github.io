@@ -81,7 +81,7 @@ The goal isn't to externalize *everything* since that would create unnecessary d
 
 **Framework configuration** for HTTP server settings, thread pool sizes, or middleware ordering rarely varies by environment. When it does, you can override specific values from the external store while keeping sensible defaults local.
 
-**Development shortcuts** that let engineers run the application locally without network dependencies make sense for rapid iteration. The key is ensuring the code path to fetch external config exists and works; you're just bypassing it locally for convenience.
+**Development shortcuts** that let engineers run the application locally without network dependencies make sense for rapid iteration. The key is ensuring the code path to fetch external config exists and works. You're just bypassing it locally for convenience.
 
 The decision rule is straightforward: if configuration is sensitive, environment-specific, or shared across services, externalize it. If it's about internal application behavior that stays constant everywhere, keep it local. For prototypes and throwaway code, do whatever gets you moving fastest, but establish the external config discipline before real users or sensitive data enter the picture.
 
@@ -103,7 +103,7 @@ The concerns that come up when teams consider this migration are legitimate, eve
 
 **"What happens when the config store is unavailable?"** In practice, cloud config stores have better uptime than the applications that depend on them. If AWS Parameter Store or Azure Key Vault is down, you likely have bigger problems since the entire region is probably degraded. For transient issues, cache config after the first fetch and use circuit breakers to serve stale values during brief outages. The dependency you're adding is on infrastructure that's more reliable than almost anything you'd build yourself.
 
-**"Startup is slower now."** True. Fetching config over the network adds latency compared to reading a local file. For most applications, we're talking about tens to hundreds of milliseconds during startup, which is imperceptible to users and irrelevant compared to database connection pool initialization, dependency injection setup, and cache warming. Cache aggressively and fetch once; the performance concern disappears.
+**"Startup is slower now."** True. Fetching config over the network adds latency compared to reading a local file. For most applications, we're talking about tens to hundreds of milliseconds during startup, which is imperceptible to users and irrelevant compared to database connection pool initialization, dependency injection setup, and cache warming. Cache aggressively and fetch once, and the performance concern disappears.
 
 **"Local development gets harder."** It gets *different*, not harder. Modern SDKs and credential chains make fetching config from external stores transparent once you've set up local credentials. Many teams use local overrides for convenience while ensuring the external fetch code path stays exercised. The initial setup takes an afternoon; the debugging time saved from "works locally, fails in production" issues pays that back quickly.
 
@@ -125,7 +125,7 @@ The shift to external config stores changes how teams work in ways that compound
 
 Testing becomes more realistic because senior engineers can run local code against remote staging or remote dev configs (with appropriate permissions) rather than maintaining local approximations that drift from reality. When something works locally and fails in staging, config drift is rarely the culprit.
 
-Security incidents from leaked credentials drop dramatically because secrets stop appearing in Git history and credential sharing over Slack stops since there's no file to share; permissions grant access directly. When you need to rotate a credential, you update one place and know it propagates everywhere, so the question "did we rotate that key in all environments?" finally has a definitive answer.
+Security incidents from leaked credentials drop dramatically because secrets stop appearing in Git history and credential sharing over Slack stops since there's no file to share. Permissions grant access directly. When you need to rotate a credential, you update one place and know it propagates everywhere, so the question "did we rotate that key in all environments?" finally has a definitive answer.
 
 Deployments simplify because the same artifact works everywhere. Build pipelines no longer template config files or maintain environment-specific variations, so you build once, deploy many times, and config comes from the environment at runtime with faster deployments and fewer things that can go wrong.
 

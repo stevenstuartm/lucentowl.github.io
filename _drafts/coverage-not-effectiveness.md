@@ -25,10 +25,6 @@ sources:
     url: "https://arxiv.org/abs/2103.07189"
   - title: "Stryker.NET Configuration"
     url: "https://stryker-mutator.io/docs/stryker-net/configuration/"
-  - title: "Testing Strategy & Architecture"
-    url: "/study-guides/architecture/testing-strategy-architecture.html"
-  - title: "Unit Testing in .NET"
-    url: "/study-guides/dotnet/c-sharp/tooling/unit-testing-in-dotnet.html"
 ---
 
 A suite reports 90% coverage. Delete every assertion in it and, for most tests written in the arrange, act, assert shape, the number barely moves. The act line runs the code, and the coverage tool records that it ran. It has no way to record whether anything checked the result.
@@ -130,7 +126,7 @@ dotnet stryker --since:main
 
 `--since` uses git to mutate only code changed since the target branch, and by default Stryker runs only the tests that cover each mutant. A pull request that touches three files produces a report about those three files. The `ignore-methods` option excludes calls such as logging, which play the same role as Google's uninteresting lines.
 
-Stryker also has a `break` threshold that fails the build below a given mutation score. It defaults to 0, and the evidence above suggests leaving it there. Put the survivors in front of the reviewer, the way Google does, and let the reviewer decide which ones deserve a test. Keep coverage for the job the research says it does well, which is showing code no test runs at all. The Testing Strategy & Architecture and Unit Testing in .NET guides cover where mutation runs fit in a pipeline and how coverage is collected under each .NET test platform.
+Stryker also has a `break` threshold that fails the build below a given mutation score. It defaults to 0, and the evidence above suggests leaving it there. Put the survivors in front of the reviewer, the way Google does, and let the reviewer decide which ones deserve a test. Keep coverage for the job the research says it does well, which is showing code no test runs at all.
 
 ## Checking Your Own Suite
 

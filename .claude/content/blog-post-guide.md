@@ -26,14 +26,14 @@ tags: [architecture, design-patterns]
 - **tags**: Array of tags for discoverability and filtering on the blog page. Use meaningful tags, not generic ones.
 
 **Optional front matter**:
-- **sources**: every URL the post links to, external or internal, in order of first mention. See "All Links Live in `sources`" below.
+- **sources**: every external URL the post draws on, in order of first mention. Never a Lucent Owl URL. See "All Links Live in `sources`" below.
 
 ```yaml
 sources:
   - title: "RFC 5789: PATCH Method for HTTP"
     url: "https://datatracker.ietf.org/doc/html/rfc5789"
-  - title: "AAA Cycle: Align-Agree-Apply"
-    url: "/study-guides/sdlc/aaa-cycle.html"
+  - title: "Microsoft REST API Guidelines"
+    url: "https://github.com/microsoft/api-guidelines"
 ```
 
 **Standard procedure for creating a new blog post**:
@@ -71,7 +71,7 @@ This rule is non-negotiable and applies to all blog post content.
 
 - ❌ NEVER put a link in a post's Markdown body, external or internal, whether as an inline link, reference link, raw `<a>` tag, bare URL, or footnote
 - ✅ Name every source in the prose itself, specifically enough that a reader could find it by search without a link: "RFC 5789", "Nielsen Norman Group's toggle-switch guidelines", "Stripe's API finalizes invoices"
-- ✅ List each URL in the `sources` front matter, in order of first mention. Internal URLs are site-relative (`/study-guides/...`). `_includes/post-sources.html` renders the list at the bottom of the page, opening external links in a new tab with `rel="noopener noreferrer"` and internal links in the same tab, so posts never write link attributes themselves
+- ✅ List each URL in the `sources` front matter, in order of first mention. `_includes/post-sources.html` renders the list at the bottom of the page and opens each link in a new tab with `rel="noopener noreferrer"`, so posts never write link attributes themselves
 - ❌ Don't rely on link text for attribution. "its own guidelines" or "issue labels" says nothing once the link is gone
 - ❌ Don't use numbered footnote markers. They'd dangle when the sources section is dropped
 
@@ -79,7 +79,13 @@ This rule is non-negotiable and applies to all blog post content.
 
 **Check**: every `sources` entry is named in the body, and every source named in the body that a reader would want to open has a `sources` entry.
 
-Internal links may point to study guides, resources, and pages. Cross-references to other posts remain banned, above, even through `sources`.
+## CRITICAL: Sources Are External, Never Lucent Owl
+
+- ❌ NEVER cite or name Lucent Owl's own content in a post: no study guides, resources, case studies, pages, or other posts, whether in the prose ("Lucent Owl's guide to...", "the site's guide") or in `sources`
+- ✅ Support every claim with an external source: the original author, a vendor's documentation, a standard, a study
+- If the only support for a claim is a site guide, find the external source the guide itself relies on, or state the point as the post's own reasoning without a citation
+
+**Rationale**: A post that cites its own site is vouching for itself, and readers discount that. Credibility comes from sources the reader didn't get from the author.
 
 ---
 

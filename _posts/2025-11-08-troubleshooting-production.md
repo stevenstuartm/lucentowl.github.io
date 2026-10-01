@@ -27,7 +27,7 @@ You need facts, not interpretations. Facts are observable and measurable:
 
 When someone says "the database is slow" or "the network is flaky" or "the deployment broke something," they're offering conclusions, not observations. These interpretations might be correct, but they skip the actual observation that leads to understanding.
 
-"The database is slow" tells you nothing actionable; you need to know what "slow" actually means. Is query execution time up? Is CPU saturated? Are there lock waits? Each observation leads to different investigations.
+"The database is slow" tells you nothing actionable. You need to know what "slow" actually means. Is query execution time up? Is CPU saturated? Are there lock waits? Each observation leads to different investigations.
 
 Start with these questions:
 - **When did it start?** Exact time, gradual or sudden onset
@@ -47,7 +47,7 @@ During active incidents, capture artifacts immediately. Thread dumps or process 
 
 ## Test Assumptions, Don't Trust Them
 
-Every incident reveals assumptions you didn't know you were making; under pressure, untested assumptions become expensive mistakes.
+Every incident reveals assumptions you didn't know you were making. Under pressure, untested assumptions become expensive mistakes.
 
 "The deployment succeeded" (but did health checks pass?), "The service is healthy" (but is it actually responding correctly?), "The cache is working" (but what's the hit rate?). Every incident surfaces assumptions about what "succeeded" or "healthy" or "working" actually means.
 
@@ -95,11 +95,11 @@ When you can't reproduce locally:
 
 Here's a concrete example: application crashes under high load, and you suspect a race condition in request handling. Without reproduction, you modify the locking logic, deploy, and hope load testing catches any issues. With reproduction, you have a test case that consistently triggers the race condition. After your fix, the test passes. You know it works before it touches production.
 
-The reproduction test case you built during the incident doesn't end when the incident ends. Turn it into an automated test. Not every issue can be captured this way; some depend on production scale or specific environmental conditions. But when you can automate the reproduction, you've built permanent protection. The problem that took hours to diagnose now fails a test in seconds if someone reintroduces it.
+The reproduction test case you built during the incident doesn't end when the incident ends. Turn it into an automated test. Not every issue can be captured this way, since some depend on production scale or specific environmental conditions. But when you can automate the reproduction, you've built permanent protection. The problem that took hours to diagnose now fails a test in seconds if someone reintroduces it.
 
 ### Common Reproduction Mistakes
 
-The most common mistake is assuming intermittent means irreproducible. Intermittent issues have conditions that trigger them; you just haven't identified the conditions yet. The issue might occur when specific events happen in a certain sequence, or when timing aligns in particular ways, or when resource thresholds are crossed. Calling it "intermittent" and moving on skips the investigation.
+The most common mistake is assuming intermittent means irreproducible. Intermittent issues have conditions that trigger them. You just haven't identified the conditions yet. The issue might occur when specific events happen in a certain sequence, or when timing aligns in particular ways, or when resource thresholds are crossed. Calling it "intermittent" and moving on skips the investigation.
 
 Another pattern: stopping investigation once you find correlation. Correlation shows you where to look; reproduction proves causation. Just because deployments happen before errors doesn't mean deployments cause errors. Reproduce the issue by deploying to prove the connection.
 
@@ -177,7 +177,7 @@ This documentation becomes critical during post-mortems and when training new te
 
 ## War Rooms: Applying Principles Under Coordination Pressure
 
-Everything above applies whether you're debugging alone or coordinating across teams. War rooms add coordination overhead; the principles don't change, but the communication requirements intensify.
+Everything above applies whether you're debugging alone or coordinating across teams. War rooms add coordination overhead. The principles don't change, but the communication requirements intensify.
 
 ### Roles
 

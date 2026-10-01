@@ -23,10 +23,6 @@ sources:
     url: "https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-configuring.html"
   - title: "Microsoft Learn: BoundedChannelFullMode Enum"
     url: "https://learn.microsoft.com/en-us/dotnet/api/system.threading.channels.boundedchannelfullmode"
-  - title: "SQS and SNS"
-    url: "/study-guides/infrastructure/aws/aws-sqs-sns.html"
-  - title: "Messaging Patterns"
-    url: "/study-guides/architecture/messaging_patterns.html"
 ---
 
 Your queue didn't absorb the overload. It scheduled it for later. When work arrives faster than consumers can finish it, and keeps arriving that way, a queue with no limit doesn't protect anything. It stores the excess, and when the consumers finally reach it, the people who asked for that work have usually stopped waiting.
@@ -142,7 +138,7 @@ The receive request has to ask for the `Deadline` attribute by name, or it won't
 
 What the consumer does with an expired message depends on whether anyone still needs the work. When nobody does, the caller has timed out and will retry or report failure on its own, so dropping the message is correct. Processing it late isn't only waste. If the caller already told a user the operation failed, a late success makes that answer wrong, and a retry from the same caller may now be waiting in the same backlog to do the work a second time. Yanacek describes a cheaper case too. Systems that run a periodic full synchronization can drop any queued change older than the most recent sweep, because the sweep already covered it.
 
-When someone does still need the work, the consumer can move it instead. Yanacek's "sidelining old traffic" checks each message's age as it's dequeued and moves old ones to a separate backlog queue that's worked "only after we're caught up on the live queue," which approximates newest-first on a broker that only offers first-in, first-out. Microsoft's Service Bus documentation describes the interactive version. When a backend can't keep up during a spike, expired jobs land on the dead-letter queue, the user is told the operation will take longer than usual, and the job is resubmitted to a slower path that emails the result. The site's Messaging Patterns guide covers the dead-letter and priority queues both approaches build on.
+When someone does still need the work, the consumer can move it instead. Yanacek's "sidelining old traffic" checks each message's age as it's dequeued and moves old ones to a separate backlog queue that's worked "only after we're caught up on the live queue," which approximates newest-first on a broker that only offers first-in, first-out. Microsoft's Service Bus documentation describes the interactive version. When a backend can't keep up during a spike, expired jobs land on the dead-letter queue, the user is told the operation will take longer than usual, and the job is resubmitted to a slower path that emails the result.
 
 Either way, the consumer has to do the check itself, even on a broker that expires messages. RabbitMQ discards an expired message "only when expired messages reach the head of a queue," and Service Bus "might choose to lazily expire these messages." Service Bus also doesn't expire a message that a consumer has already locked, so a consumer holding a message past its deadline decides for itself whether to process it.
 
@@ -164,7 +160,7 @@ Microsoft's documentation opens its page on expiration with the assumption the d
 
 For each queue between your services this week:
 
-- Check for an alarm on the age of the oldest message, not just on depth. On SQS that's `ApproximateAgeOfOldestMessage`, which the site's SQS and SNS guide covers along with dead-letter queue alarms.
+- Check for an alarm on the age of the oldest message, not just on depth. On SQS that's `ApproximateAgeOfOldestMessage`.
 - Find who is waiting for the result of each message, and how long they wait before giving up.
 - Compare that wait with the worst age the queue has reached in an incident. Every message older than it was processed for nobody.
 - Check what a consumer does with a message older than its caller's timeout: process it, drop it, or set it aside.

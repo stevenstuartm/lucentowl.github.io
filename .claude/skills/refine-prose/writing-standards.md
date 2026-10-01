@@ -37,6 +37,18 @@ Each of these announces or hedges instead of stating the point directly:
 ```
 "X is/are real" (e.g., "the costs are real") and "[verb] real [noun]" (e.g., "does real work") are both vague qualifiers — describe specifically what you mean instead. The first pattern's trailing `([^-\w]|$)` excludes compounds like "real-time" or "real-world" (no lookahead needed — it just requires the character after "real", if any, to not continue the word or start a hyphenated compound).
 
+**"Name" as a verb**:
+```
+\b(name|names|named|naming)\s+(the|a|an|this|that|these|those|it|its|their|each|every)\b
+```
+"The advice names the outcome", "the report named this pressure", "Name the service that owns it" all use "name" to stand in for a more exact verb. Say what the subject actually does: states, blames, identifies, lists, traces, or, in a checklist, finds. The pattern requires a determiner right after the word, so the noun ("claim names", "field names") and the adjective ("a named owner") don't match.
+
+**"Cost" as a verb for a non-financial loss**:
+```
+\bcost(s|ing)?\s+(it|them|him|her|us|you|its|their)\b
+```
+"Moving it to the gateway costs it all three", "what it costs you", "the split cost them" dress up a loss or a tradeoff as a price. Say what is lost or given up: "In the gateway, it loses all three", "you give up the ability to write in more than one region". Exception: skip a hit where the object is actually money ("costing us $30K per month"). The noun ("the cost of X") doesn't match.
+
 **AI-tell colon constructions**:
 ```
 (What's converging|A critical distinction|The difference|The key|The point|Here's why):

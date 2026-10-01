@@ -27,7 +27,6 @@ Ideas the author approved, waiting for a draft, oldest approval first. When a dr
 | `onboarding-time-measures-architecture` | What Developer Onboarding Time Says About Your Architecture | 2026-09-30 | `_drafts/onboarding-time-measures-architecture.md` |
 | `feature-flags-configuration-with` | Feature Flags Are Configuration With a Deadline | 2026-09-30 | `_drafts/feature-flags-configuration-with.md` |
 | `serverless-cheap-be-wrong` | Serverless Is Cheap to Be Wrong With | 2026-09-30 | `_drafts/serverless-cheap-be-wrong.md` |
-| `api-gateway-shouldnt-know` | The API Gateway Shouldn't Know Your Business | 2026-09-30 | `_drafts/api-gateway-shouldnt-know.md` |
 | `migration-tools-keep-code` | Migration Tools Keep the Code and Lose the Intent | 2026-09-30 | `_drafts/migration-tools-keep-code.md` |
 | `local-first-authority` | Local-First Software Moves Authority to the Device | 2026-09-30 | `_drafts/local-first-authority.md` |
 | `monorepo-vs-polyrepo-about` | Monorepo vs Polyrepo Is About Who Owns Change | 2026-09-30 | `_drafts/monorepo-vs-polyrepo-about.md` |

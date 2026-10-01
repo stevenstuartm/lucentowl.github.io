@@ -9,8 +9,6 @@ sources:
     url: "https://brandur.org/soft-deletion"
   - title: "Microsoft Learn: Global Query Filters in EF Core"
     url: "https://learn.microsoft.com/en-us/ef/core/querying/filters"
-  - title: "Multi-Tenant Architecture"
-    url: "/study-guides/architecture/multi-tenant-architecture.html"
   - title: "paranoia gem README"
     url: "https://github.com/rubysherpas/paranoia"
   - title: "discard gem README: Why not paranoia or acts_as_paranoid?"
@@ -19,14 +17,14 @@ sources:
     url: "https://gdpr-info.eu/art-17-gdpr/"
   - title: "ICO: Right to erasure"
     url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/individual-rights/individual-rights/right-to-erasure/"
+  - title: "Federal Rules of Civil Procedure, Rule 37(e) (Cornell LII)"
+    url: "https://www.law.cornell.edu/rules/frcp/rule_37"
   - title: "TechCrunch: Twitter keeps deleted direct messages for years (2019)"
     url: "https://techcrunch.com/2019/02/15/twitter-direct-messages/"
-  - title: "Data Protection"
-    url: "/study-guides/security/data-protection.html"
   - title: "PostgreSQL: Partial Indexes"
     url: "https://www.postgresql.org/docs/current/indexes-partial.html"
-  - title: "Entity Framework Core"
-    url: "/study-guides/dotnet/c-sharp/libraries/entity-framework-core.html"
+  - title: "Microsoft Learn: Indexes in EF Core (index filter)"
+    url: "https://learn.microsoft.com/en-us/ef/core/modeling/indexes"
 ---
 
 Your records aren't deleted. They're in a state your schema refuses to name. A row with `IsDeleted = true` might be an order the customer cancelled, an account that was closed, a document someone put in the trash by mistake, or a person who asked to be forgotten. The database stores all of them the same way, and the code that reads them has to guess which one it's looking at.
@@ -62,7 +60,7 @@ Legal hold doesn't fit in the table at all, and that's instructive. A hold isn't
 
 A deleted flag is only as good as the filter every reader applies. Leach's point is that "soft deletion logic bleeds out into all parts of your code," and forgetting it "accidentally returns data that's no longer meant to be seen."
 
-ORM-level filters narrow the gap without closing it. EF Core's global query filter adds the predicate to every query EF Core runs against the entity type, but only there. A report written in SQL, a Dapper query, a warehouse export, or a support engineer at a database console reads every row, as the site's Multi-Tenant Architecture guide notes for tenant filters, which share the mechanism. Inside EF Core, filters can only be defined on the root type of an inheritance hierarchy, and the documentation warns that a filter on a required navigation can make rows vanish from results. EF Core can load a required relationship with an inner join, so filtering out the related row filters out the row that references it too. Soft-delete a customer, and a query for invoices that includes the customer returns fewer invoices.
+ORM-level filters narrow the gap without closing it. EF Core's global query filter adds the predicate to every query EF Core runs against the entity type, but only there. A report written in SQL, a Dapper query, a warehouse export, or a support engineer at a database console reads every row. Tenant filters built on the same mechanism leak the same way. Inside EF Core, filters can only be defined on the root type of an inheritance hierarchy, and the documentation warns that a filter on a required navigation can make rows vanish from results. EF Core can load a required relationship with an inner join, so filtering out the related row filters out the row that references it too. Soft-delete a customer, and a query for invoices that includes the customer returns fewer invoices.
 
 The Ruby ecosystem went through the same arc. The paranoia gem, which hides deleted rows through a default scope, now says it "is not recommended for new projects." It points to the discard gem instead, whose README gives the reason. A default scope "will take more effort to work around and will cause more headaches," so discard makes every query say whether it wants discarded rows.
 
@@ -78,7 +76,7 @@ A flag also can't tell an erasure request apart from any other deletion. If the 
 
 ### Legal Hold Runs the Other Way
 
-Erasure has exceptions, and one of them points the other way. Article 17 doesn't apply where processing is needed "for the establishment, exercise or defence of legal claims," and the site's Data Protection guide notes that once litigation is foreseeable, "deletion of relevant data has to stop." A row can be pending erasure and under a hold at the same time, and for the data the hold covers, the hold generally wins until it's released.
+Erasure has exceptions, and one of them points the other way. Article 17 doesn't apply where processing is needed "for the establishment, exercise or defence of legal claims," and in US litigation the duty to preserve starts before any lawsuit is filed. Federal Rule of Civil Procedure 37(e) sanctions the loss of electronic information "that should have been preserved in the anticipation or conduct of litigation." A row can be pending erasure and under a hold at the same time, and for the data the hold covers, the hold generally wins until it's released.
 
 A boolean can't represent that combination. A purge job driven by `IsDeleted` can delete held data, and one that skips anything suspicious will keep data past its legal deadline. The only way to get both right is for the schema to record the hold and the erasure deadline as separate facts.
 
@@ -146,7 +144,7 @@ Each state also gets its own query rules. Active lists filter to `Active`. Histo
 
 A flag forces one answer to whether a deleted row still owns its unique values, and it's often the wrong one. A soft-deleted user who keeps their email blocks anyone from signing up with it, while dropping the constraint for every deleted row lets a trashed account's restore collide with a new one.
 
-A partial unique index makes the answer a per-state decision. PostgreSQL's documentation shows the pattern, a unique index with a `WHERE` clause that applies only to the rows matching it, and SQL Server has the same thing as a filtered index, which EF Core configures with `HasFilter`, as the site's Entity Framework Core guide shows.
+A partial unique index makes the answer a per-state decision. PostgreSQL's documentation shows the pattern, a unique index with a `WHERE` clause that applies only to the rows matching it, and SQL Server has the same thing as a filtered index, which EF Core's index documentation configures with `HasFilter`.
 
 ```sql
 -- Active and closed customers keep their email unique; erasure candidates release it.

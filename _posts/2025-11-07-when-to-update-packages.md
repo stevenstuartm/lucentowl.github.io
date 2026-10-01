@@ -30,7 +30,7 @@ Before updating any dependency, evaluate the change type and context. Semantic v
 
 **Patch updates (x.y.Z)** should favor security fixes and critical bug patches, but verify relevance first. If a patch fixes a theoretical vulnerability in code you don't execute, the risk of updating may exceed the risk of staying put. Check whether the vulnerability applies to your usage patterns, whether the bug affects code paths you use, and whether the community has reported regressions.
 
-**Minor updates (x.Y.z)** require evaluating value against risk. New features and non-breaking changes matter only if they solve problems you have or deliver performance improvements that affect your workload. Check community adoption rates and feedback; minor updates with low adoption and thin feedback deserve skepticism. Let others find the edge cases first.
+**Minor updates (x.Y.z)** require evaluating value against risk. New features and non-breaking changes matter only if they solve problems you have or deliver performance improvements that affect your workload. Check community adoption rates and feedback. Minor updates with low adoption and thin feedback deserve skepticism. Let others find the edge cases first.
 
 **Major updates (X.y.z)** demand a business case. Breaking changes consume significant engineering time for migration, testing, and bug fixes. The value must justify the investment. Ask what capabilities become available, what technical debt gets resolved, and what risk comes from delaying (losing vendor support, missing future security patches). Treat major updates as planned initiatives with dedicated time and clear success criteria, not as squeezed-in tasks during feature development.
 
@@ -45,7 +45,7 @@ This framework doesn't guarantee perfection, and perhaps not every step is alway
 ## The Cost of Delay
 
 Delaying updates indefinitely creates different risks:
-- **Security exposure**: Unpatched vulnerabilities accumulate; attackers target known CVEs in outdated packages
+- **Security exposure**: Unpatched vulnerabilities accumulate, and attackers target known CVEs in outdated packages
 - **Vendor abandonment**: Falling too far behind loses access to vendor support and community knowledge
 - **Compounding migration cost**: The longer you wait, the larger the gap between current and target versions, making eventual migration more painful
 - **Ecosystem drift**: New libraries and tools may assume newer dependency versions, limiting your options
@@ -60,7 +60,7 @@ Fear drives teams toward exhaustive testing: "We changed a dependency, so we nee
 
 Target your testing based on what changed:
 - **Regression tests**: Focus on code paths that use the updated dependency directly or indirectly
-- **Load tests**: Replicate production traffic patterns against the specific features that changed; validate SLA compliance (response times, throughput, error rates)
+- **Load tests**: Replicate production traffic patterns against the specific features that changed, then validate SLA compliance (response times, throughput, error rates)
 - **Integration tests**: If the dependency handles I/O (databases, APIs, file systems), test those boundaries thoroughly
 
 Load testing deserves special attention. Bugs that surface only under concurrent load won't appear in functional tests. Functional tests with serial requests can pass cleanly while hiding race conditions, deadlocks, or resource exhaustion that only manifest under production concurrency. Load tests should mirror production traffic volume and patterns, not arbitrary "stress everything" scenarios.

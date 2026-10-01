@@ -9,12 +9,10 @@ sources:
     url: "https://dl.acm.org/doi/10.5555/381992.383631"
   - title: "Martin Kleppmann: Designing Data-Intensive Applications (O'Reilly)"
     url: "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/"
-  - title: "Replication and Consistency"
-    url: "/study-guides/data/replication-and-consistency.html"
   - title: "Amazon Aurora User Guide: Replication with Amazon Aurora"
     url: "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Replication.html"
-  - title: "Amazon RDS and Aurora for System Architects"
-    url: "/study-guides/infrastructure/aws/aws-rds-aurora.html"
+  - title: "Amazon RDS User Guide: Working with DB instance read replicas"
+    url: "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
   - title: "TanStack Query: Invalidations from Mutations"
     url: "https://tanstack.com/query/latest/docs/framework/react/guides/invalidations-from-mutations"
   - title: "Ruby on Rails Guides: Multiple Databases with Active Record"
@@ -39,13 +37,13 @@ The user saved. The page reloaded. The change was gone, for 80 milliseconds. Whe
 
 Adding a read replica feels like a capacity change, but it's a consistency change. Every read routed to a replica becomes eventually consistent, including the reads that come right after the same user or the same service wrote something. Nothing in the routing asks which reads those are, and the test suite usually runs against a single database that can't show the difference, so the bugs arrive looking intermittent and untraceable.
 
-The guarantees these paths need aren't new. Douglas Terry and his colleagues at Xerox PARC named them in "Session Guarantees for Weakly Consistent Replicated Data" (PDIS 1994): read your writes, monotonic reads, writes follow reads, and monotonic writes. Martin Kleppmann's *Designing Data-Intensive Applications* covers the first two in its chapter on replication, along with the standard fixes, and the site's Replication and Consistency guide catalogs the anomalies lag produces. What I want to add is how to find the paths that need them. They take four recognizable shapes, the fixes frameworks ship cover only some of those shapes, and you can find the rest by making the lag big enough to see.
+The guarantees these paths need aren't new. Douglas Terry and his colleagues at Xerox PARC named them in "Session Guarantees for Weakly Consistent Replicated Data" (PDIS 1994): read your writes, monotonic reads, writes follow reads, and monotonic writes. Martin Kleppmann's *Designing Data-Intensive Applications* covers the first two in its chapter on replication, along with the standard fixes. What I want to add is how to find the paths that need them. They take four recognizable shapes, the fixes frameworks ship cover only some of those shapes, and you can find the rest by making the lag big enough to see.
 
 ## A Replica Makes Every Read Eventual
 
 ### The Lag Is Small, but the Next Read Can Be Faster
 
-Managed replicas are fast, which is why this is easy to dismiss. The Aurora documentation says replica lag "is usually much less than 100 milliseconds after the primary instance has written an update." Ordinary RDS read replicas use the engine's asynchronous replication and can run seconds behind, as the site's Amazon RDS and Aurora guide describes.
+Managed replicas are fast, which is why this is easy to dismiss. The Aurora documentation says replica lag "is usually much less than 100 milliseconds after the primary instance has written an update." Ordinary RDS read replicas are updated through the engine's own asynchronous replication, as the RDS documentation on read replicas describes, and it offers no comparable figure for their lag.
 
 But the read that follows a write comes quickly. A browser follows the redirect after a form post as soon as the response arrives, and a single-page app refetches the moment its mutation succeeds. Either read arrives one round trip after the write returned, and for a client near the servers that can be less than the lag Aurora calls small. The same page adds that "replica lag varies depending on the rate of database change," and that during heavy writes "you might see an increase in replica lag." So the window widens exactly when the system is busiest and the most users are writing.
 

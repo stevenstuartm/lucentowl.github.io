@@ -21,10 +21,10 @@ I became a better developer as I became more business-minded. Not because I lear
 
 Understanding value and customer alignment changed how I approached every decision:
 
-- I stopped building the wrong thing well—the most expensive mistake in software
+- I stopped building the wrong thing well, which is the most expensive mistake in software
 - I could evaluate tradeoffs against actual value, not abstract "best practices"
 - I knew when "good enough" was actually good enough
-- I understood the cost of delay—shipping imperfect beats perfecting endlessly
+- I understood the cost of delay, and that shipping imperfect beats perfecting endlessly
 
 Code knowledge tells you *how*. Business understanding tells you *what*, *why*, and *whether*. AI is getting remarkably good at *how*. It has no grasp of *why*.
 

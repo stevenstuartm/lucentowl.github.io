@@ -5,9 +5,6 @@ date: 2025-11-07
 description: "Many celebrated system rebuilds appear successful not because of new technology, but because they force teams to realign with value and best practices. This realignment work could have happened without the rebuild."
 tags: [architecture, leadership, decision-making, aaa-cycle]
 author: steven-stuart
-sources:
-  - title: "AAA Cycle: Align-Agree-Apply"
-    url: "/study-guides/sdlc/aaa-cycle.html"
 ---
 
 Business and technical minded people both tend to credit new technology for the gains seen after a system or tool rebuild. They will also often blame the tech for when a rebuild goes awry. But when you examine what actually changed, the technology rarely drove the gains or caused the failure. The improvements (or lack of) came from alignment with business value and the application of operational discipline. Often, the gains could have been seen without the rebuild or the failure measured long before additional development waste.
@@ -78,7 +75,7 @@ Without addressing these root causes, the new system will develop the same probl
 
 ## When Rebuilds Are Justified
 
-Rebuilds aren't always wrong; some situations demand them. When your runtime or infrastructure reaches end-of-support and security patches stop flowing, you must migrate. Staying on unsupported platforms creates unacceptable risk.
+Rebuilds aren't always wrong, and some situations demand them. When your runtime or infrastructure reaches end-of-support and security patches stop flowing, you must migrate. Staying on unsupported platforms creates unacceptable risk.
 
 When the system's core architecture cannot support required characteristics, incremental refactoring may cost more than rebuilding. Some architectural shifts are fundamental enough that preserving the old system while transforming it creates more complexity than starting fresh.
 

@@ -79,7 +79,7 @@ Turns one approved idea into a draft in `_drafts/`, then reviews it with `/revie
    - If the evidence meets the entry's **Could change if**, or otherwise undercuts the hypothesis, argue what the evidence does support within the entry's question, and record the change. Never write a draft that argues a hypothesis the research overturned.
    - If the evidence leaves no defensible thesis within the question, don't draft. Leave the idea in Awaiting Draft, add a **Draft attempt:** line with the date and what the evidence showed, and report it.
 4. **Write the draft** at `_drafts/<id>.md`. The ID, not the title, names the file, because files are never renamed and titles still move.
-   - Front matter per the blog post guide: `title` (the entry's title), `description`, `tags`, and `sources` listing every source the body names. No `date`, since the date belongs to publication. No links in the body.
+   - Front matter per the blog post guide: `title` (the entry's title), `description`, `tags`, and `sources` listing every source the body names, all external. Never cite or name a Lucent Owl page. No `date`, since the date belongs to publication. No links in the body.
    - Open from the hook, state the thesis early, and build the argument from mechanisms the reader can check. End on the reader's check from the entry.
    - **Never write the author's experience.** Where the entry's **Experience** field suggests a first-person example belongs, leave a marker for the author instead:
 

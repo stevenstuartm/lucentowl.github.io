@@ -21,10 +21,6 @@ sources:
     url: "https://aws.amazon.com/message/101925/"
   - title: "Amazon Cognito Developer Guide: Verifying JSON Web Tokens"
     url: "https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html"
-  - title: "Reliability Patterns"
-    url: "/study-guides/architecture/reliability_patterns.html"
-  - title: "SLOs and Alerting"
-    url: "/study-guides/observability/slos-and-alerting.html"
   - title: "Site Reliability Engineering: Service Level Objectives"
     url: "https://sre.google/sre-book/service-level-objectives/"
 ---
@@ -109,7 +105,7 @@ public async Task<ProductPage> GetProductPage(string productId, CancellationToke
 }
 ```
 
-The timeout and the catch are mechanics. The empty list is a product decision, and it's the part no library supplies. For recommendations, showing nothing is fine. For a price, a stale value might be acceptable for a few minutes and wrong after that. The Queue article calls this failing safe, where a system serves cached data and then fails closed once the data is too old to trust. Choosing between these for each dependency is design work. The site's Reliability Patterns guide covers the mechanisms that carry the choice out, such as timeouts, circuit breakers, and graceful degradation.
+The timeout and the catch are mechanics. The empty list is a product decision, and it's the part no library supplies. For recommendations, showing nothing is fine. For a price, a stale value might be acceptable for a few minutes and wrong after that. The Queue article calls this failing safe, where a system serves cached data and then fails closed once the data is too old to trust. Choosing between these for each dependency is design work.
 
 ### Soft Dependencies Drift Back to Hard
 
@@ -119,7 +115,7 @@ The article's answer is fault injection, meaning integration tests that verify t
 
 ## Set the SLO After the Dependency List
 
-Teams tend to choose a target and then operate toward it. The arithmetic reverses that order and makes the target an output of the design. List the calls a user journey makes and mark each one hard or soft. Multiply the hard ones to get the ceiling, then leave room below it for the service's own bugs, deploys, and mistakes. In the Queue article's example, the dependencies and the service itself each get about half of the error budget. What's left is the highest number you can honestly publish. The site's SLOs and Alerting guide covers the rest of the job, from choosing the target users need to alerting as the budget burns.
+Teams tend to choose a target and then operate toward it. The arithmetic reverses that order and makes the target an output of the design. List the calls a user journey makes and mark each one hard or soft. Multiply the hard ones to get the ceiling, then leave room below it for the service's own bugs, deploys, and mistakes. In the Queue article's example, the dependencies and the service itself each get about half of the error budget. What's left is the highest number you can honestly publish.
 
 When that number comes out lower than what callers need, the Queue article gives a service three options: raise its availability, add mitigation, or lower the published target. Of the last, it says "often it is the correct choice," because a gap nobody addresses gets corrected by an outage instead.
 
