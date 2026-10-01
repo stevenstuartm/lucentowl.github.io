@@ -30,23 +30,23 @@ sources:
     url: "https://csrc.nist.gov/pubs/sp/800/207/final"
 ---
 
-I appreciate what an API gateway brings to most systems, at the right time and in the right place. It takes TLS, rate limiting, and access logging off every service's plate, turns away bad tokens at the edge before any service spends work on them, and lets the services behind it move without breaking their clients. But a gateway's configuration also tends to collect things nobody designed it to hold, like a decision about which accounts a user may see, a check on a customer's plan, a response field renamed back so an older version of the mobile app keeps working, or a call to a second service to decide whether the first one should be reached at all. Each of those arrived as a small, sensible change.
+I appreciate what an API gateway brings to most systems, at the right time and in the right place. It takes TLS, rate limiting, and access logging off every service's plate, turns away bad tokens at the edge before any service spends work on them, and lets the services behind it move without breaking their clients. But a gateway's configuration also tends to collect things nobody designed it to hold, like a check on a customer's plan, a response field renamed back for an older client version, or a call to a second service to decide whether the first one should be reached at all.
 
-That drift isn't always carelessness. The gateway is the cheapest place in the system to apply a rule to every external request, so rules flow toward it. The decade-old advice that business logic doesn't belong there hasn't stopped the drift, because it says where business logic shouldn't go and little about the forces that send it there. A rule belongs in the gateway only if the team that owns the gateway could change it correctly without asking a domain team. Keeping rules out takes an answer to each force, and when an emergency does justify a business rule in the gateway, it goes in as debt, with a domain owner and a scheduled removal.
+That drift in purpose isn't always carelessness. The gateway is the cheapest place in the system to apply a business domain rule to every external request, so rules flow toward it. The decade-old advice that business logic doesn't belong there hasn't stopped the drift, because it says where business logic shouldn't go and little about the forces that send it there. A business domain rule belongs in the gateway only if the team that owns the gateway could change it correctly without asking a domain team. Keeping rules out takes an answer to each force, and when an emergency does justify a business rule in the gateway, it goes in as debt, with a domain owner and a scheduled removal.
 
 ## A Decade of Warnings Hasn't Stopped the Drift
 
 In March 2014, James Lewis and Martin Fowler described microservices as favoring "smart endpoints and dumb pipes," against the Enterprise Service Bus, whose products "often include sophisticated facilities for message routing, choreography, transformation, and applying business rules." Thoughtworks put "overambitious API gateways" on Hold in its Technology Radar from November 2015 through May 2018. The April 2016 entry calls the pattern "a worrying re-emergence of this disease," the disease being business smarts pushed into middleware, and says that "any domain smarts such as data transformation or rule processing should live in applications or services where they can be controlled by product teams working closely with the domains they support." The radar dropped the entry after 2018, but the features it worried about kept shipping, and the major gateway products today run general-purpose code in the request path.
 
-The vendors agree. Microsoft's Gateway Offloading pattern, the Azure Architecture Center's guidance on moving shared concerns like TLS termination, authentication, and throttling into a gateway, says "Never offload business logic to the gateway." AWS's documentation for REST API mapping templates recommends a proxy integration over transforming data in the gateway when possible.
+Vendors' own guidance agrees. Microsoft's Gateway Offloading pattern, the Azure Architecture Center's guidance on moving shared concerns like TLS termination, authentication, and throttling into a gateway, says "Never offload business logic to the gateway." AWS's documentation for REST API mapping templates recommends a proxy integration over transforming data in the gateway when possible.
 
 ## Why Rules Drift Into the Gateway
 
-Four forces pull a rule toward the gateway, and each one makes sense to whoever is making the change that day.
+Four forces pull a rule toward the gateway, and each one probably makes perfect sense to whoever is making the change that day.
 
 ### Every External Request Passes Through It
 
-Suppose a rule has to apply to every client of an API: premium customers can export more than 10,000 rows, and everyone else can't. In the services, that rule is a change to the export service, and possibly to each service that exposes a large download. In the gateway, it's one policy that compares the row count in the request against a claim from the caller's token and rejects the request before any service sees it.
+Suppose a rule has to apply to every client of an API: premium customers can request to export more than 10,000 rows, and everyone else can't. In the services, that rule is a change to the export service, and possibly to each service that exposes a large download. In the gateway, it's one policy that compares the row count in the request against a claim from the caller's token and rejects the request before any service sees it. The person making the change may not even be thinking about what the customer paid for. In the moment, the limit can look be an urgent fix to stop large exports from degrading the system for everyone.
 
 ### It Ships on a Different Schedule
 
@@ -78,19 +78,19 @@ Written as an API Management policy, the export rule is short, it works, and it 
 
 ### Security Wants One Place to Check
 
-Authorization is often the first business rule to land in the gateway, and the push tends to come from a security group that doesn't trust dozens of service teams to each get it right and wants one place to audit. The gateway already checks tokens, so it looks like that place. The drift starts when the gateway moves from authentication, confirming that a token is well formed, signed, unexpired, and tied to a live session, to authorization, deciding what the caller may do. That tends to begin with a role check on a route and grow into decisions about which records the caller may touch, such as whether a user may export account 4417's data.
+Authorization is often the first business rule to land in the gateway, and the push tends to come from a security group that doesn't trust multiple dev teams to each get it right and wants one place to audit. The gateway already checks tokens, so it looks like that place. The drift starts when the gateway moves from authentication, confirming that a token is well formed and active, to authorization, deciding what the caller may do. That tends to begin with a role check on a route and grows into decisions about which records the caller may touch, such as whether a user may export account data.
 
 ## A Gateway Rule Loses Its Owner, Its Coverage, and Its Tests
 
-In the owning service, a rule has one team deciding what it means, runs on every path to the capability it protects, and is tested with the code it governs. In the gateway, it loses all three.
+In the owning service, a rule has one team deciding what it means, runs on every path to the capability it protects, and is tested with the code it governs. In the gateway, it loses at least its tests and its coverage, and usually its single owner as well.
 
 ### Its Meaning and Its Enforcement Get Different Owners
 
 The export policy encodes two business facts. There's a plan called premium, and it has a higher export limit than every other plan. The billing or entitlements team decides what plans exist and the export team decides what they allow, but the platform team owns the policy. The Gateway Offloading pattern presents a dedicated gateway team as a benefit for specialized concerns like security. For a business rule, the same arrangement means the team that can change the rule's meaning can't see where it's enforced, and the team that enforces it can't judge whether it's still right.
 
-Consider what happens when sales introduces an enterprise plan. Billing adds `enterprise` to the tier claim, and the policy still compares against `premium`, so enterprise customers, who pay the most, get rejected on large exports. No test fails, because no test in either service ever ran the rule. The fix needs the platform team to change a policy whose meaning they didn't write, once someone realizes it exists.
+Consider what happens when sales introduces an enterprise plan. Billing adds `enterprise` to the tier claim, and the gateway rule still compares against `premium`, so enterprise customers, who pay the most, get rejected on large exports. No test fails, because no test in either service ever ran the rule. The fix needs the platform team to change a rule whose meaning they didn't write, once someone actually realizes it exists.
 
-The same split makes the rule hard to remove. The platform team can see the policy but can't tell whether any client depends on it, and the domain team could answer that but may not know the policy exists. So rules accumulate, each one cheaper to leave than to trace, until the gateway becomes the middleware Lewis and Fowler described, full of routing, transformation, and business rules.
+The same split makes the rule hard to remove. The platform team can see the rule but can't tell whether any client depends on it, and the domain team could answer that but may not know the rule exists. So rules accumulate, each one cheaper to leave than to trace, until the gateway becomes the middleware Lewis and Fowler described, full of routing, transformation, and business rules.
 
 This loss needs separate teams. When one team owns both the gateway and the export service, nothing splits, but that team still loses paths and tests, because those losses come from where the rule runs.
 
@@ -98,7 +98,7 @@ This loss needs separate teams. When one team owns both the gateway and the expo
 
 The gateway can enforce the rule only on requests that pass through it, and only with what those requests contain.
 
-The first gap is the routes that never cross the gateway. Follow one customer on the free plan who wants 50,000 rows. Calling the public API, they get the 403. Then they click Export in the product's web app, whose backend calls the export service over the internal network, and the export runs. They set up a nightly scheduled export, and the scheduler, acting with its own service identity, publishes an `ExportRequested` message that the export service consumes, and that export runs too. The same customer gets three different answers to the same question depending on the route.
+The first gap is the routes that never cross the gateway. Follow one customer on the free plan who wants 50,000 rows. Calling the public API, they get the 403. Then they click Export in the product's web app, whose backend calls the export service over the internal network, and the export runs. They set up a nightly scheduled export. The scheduler, acting with its own service identity, publishes an `ExportRequested` message that the export service consumes, and that export runs too. The same customer asks the same question three ways and gets two different answers.
 
 The Gateway Offloading pattern recommends that backends accept requests only through the gateway, which stops outside clients from bypassing it but doesn't help here. The web app's backend and the scheduler are part of the product, the queued message never becomes an HTTP request, and even a scheduler call routed through the gateway would carry the scheduler's identity, with no `tier` claim to read. So the export service needs its own check, and the enterprise-plan change now has to reach two copies of the rule. Without that check, free customers get unlimited exports by scheduling them.
 
@@ -140,7 +140,7 @@ The gateway looks like one change where the services look like several, but it o
 
 Sometimes the platform team's shorter queue is exactly what's needed, for a missed deadline or an incident. If a Friday release breaks the export service's limit check and free customers start pulling millions of rows, the platform team can ship the policy above within the hour, long before the export team can safely deploy a fix. Ship it, but ship it as debt:
 
-- **The export team owns the fix,** booked into a specific release the day the policy ships. Once the pressure passes, nothing presses on a policy that seems to work.
+- **The export team owns the fix,** booked into a specific release the day the policy ships. Once the incident ends, nothing pushes anyone to replace a policy that seems to work.
 - **The policy carries its owner, ticket, and removal date,** so anyone reading the gateway can tell a stopgap from a rule that belongs there.
 - **The fix isn't done until the policy is deleted** and the service's own test covers the routes the stopgap never saw.
 
@@ -152,7 +152,7 @@ Because the gateway can express almost any rule, a business rule gets in wheneve
 
 ### Split Authorization by Who Owns the Facts
 
-Security can get consistent, auditable authorization without the gateway, but how depends on the form of the decision. Role-based decisions, such as who holds the support-agent role or which tenant a user belongs to, rest on facts security or identity already owns, so they can live in one central policy that every service asks on every route. Contextual decisions, such as whether a user may export account 4417 given its status, a legal hold, or the customer's plan, rest on domain facts that change in real time. Centralizing those repeats the gateway's split one layer over, so they stay in the domain service, written and tested by the team that owns the facts.
+Security can get consistent, auditable authorization without the gateway, but how depends on the form of the decision. Role-based decisions, such as who holds the support-agent role or which tenant a user belongs to, rest on facts security or identity already owns, so they can live in one central policy that every service asks on every route. Contextual decisions, such as whether a user may export account 4417 given its status, a legal hold, or the customer's plan, rest on domain facts that can change from one request to the next. Centralizing those repeats the gateway's split one layer over, so they stay in the domain service, written and tested by the team that owns the facts.
 
 Where security doesn't own the rules, it can still own how every service enforces them. Shared middleware can reject any request a service doesn't explicitly allow, so a forgotten check refuses access instead of granting it, and every service can record its authorization decisions in one shared log for security to audit.
 
@@ -160,11 +160,11 @@ Either way, the check runs in the service. A gateway-only check leaves the web a
 
 ## Find the Business Rules Already in Your Gateway
 
-Open your gateway's configuration this week, whether that's policies, plugins, mapping templates, or route rules, and go through it with these questions:
+Open your gateway's configuration this week, whether that's policies, plugins, mapping templates, or route rules, and go through it with these checks:
 
 - **List every rule that references a business concept.** Searching for claim names and domain terms finds most of them.
 - **Find the service that owns each concept,** and ask whether the gateway team could change the rule correctly without asking that service's team.
 - **Find every authorization rule,** from route role checks to record access, and move it into the service, with role decisions in a central policy.
 - **Trace every path to the capability the rule protects,** including jobs, consumers, internal tools, and other gateways.
 - **Find the test that fails when the rule breaks.** If the owning service has none, the rule is unverified.
-- **Give each stopgap and transformation an owner and a removal date,** and add the pipeline check that enforces them. One with neither is business logic that stayed.
+- **Give each stopgap and transformation an owner and a removal date,** and add a pipeline check that enforces them. One with neither is business logic that stayed.
