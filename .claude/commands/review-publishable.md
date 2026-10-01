@@ -63,6 +63,7 @@ Resolve the target file: use `$ARGUMENTS` if provided; otherwise use the file cu
 - Content type (blog post in `_posts/`, study guide in `_guides/`, other)
 - Title, date, and description from front matter
 - Approximate word count and structure (number of H2/H3 sections)
+- Reading time as the site will show it (see the reading-time budget in Step 8)
 
 State these facts before proceeding.
 
@@ -138,6 +139,24 @@ Assess:
 - Is there filler — transitions, connective tissue, or section openings that exist to bridge structure rather than to say something?
 - Is there anything missing that the thesis implies but the body does not deliver?
 
+**Reading-time budget (blog posts).** A blog post should read in about 14 minutes or less. The author should never have to ask for this. `_layouts/post.html` shows `floor(rendered words / 200)` minutes, so 14 minutes means fewer than 3,000 words once markup is stripped. Measure it with:
+
+```bash
+python -c "import re,sys; s=open(sys.argv[1],encoding='utf-8').read(); b=s[s.index('\n---\n',4)+5:]; n=len([t for t in b.split() if not re.fullmatch(r'#+|-+|\|[-| ]*|\||\`\`\`\w*|\*\*',t)]); print(n,'words,',n//200,'min')" <file>
+```
+
+A post over budget is an `L#` finding, and it's a FIX. Bring it under budget in Step 11 with the focusing methods below. Adding material in the resolution pass doesn't exempt the post. Pay for every addition with a cut somewhere else. Other content types have no fixed budget, because case studies and guides can run longer, but the focusing methods apply to them all the same.
+
+**Focusing methods.** Use these in order. The first ones remove repetition, and the last ones reduce substance:
+
+1. **Say each point once, in its home section.** When a later section restates an earlier section's case (a conclusion re-arguing a gap, an intro previewing every loss the body lists), keep the full version where it's argued and shrink the other to a clause that points back to it.
+2. **Merge paragraphs that make the same move.** Two paragraphs that each end at the same conclusion become one.
+3. **Drop restating closers and lead-ins**, such as a sentence that repeats what the example just showed or a paragraph opener that rephrases the heading.
+4. **Compress the conclusion to what the body hasn't already said.** The answers or recommendations carry new material, and the diagnosis is already on the page.
+5. **Trim secondary evidence last.** Keep at least one source per claim, and cut a second quote or a supporting detail only after steps 1-4 have run out.
+
+Never cut the post's examples, its sources for claims it still makes, or any section the header tree depends on just to hit a number. If the post can't fit the budget without losing its argument, the scope is too broad. Raise that as a Decided finding that splits or narrows the post, and don't thin every section evenly.
+
 ### Step 9 — Practical artifact check
 
 A publishable post should leave the reader with something concrete they can apply — not just an argument they found interesting. This could be a decision framework ("use X when A, B, C; use Y when D, E, F"), a before/after diagram, a named principle stated as a testable rule, a checklist, or an annotated example with real consequences.
@@ -191,7 +210,7 @@ Where a finding turns on a decision you would rather the author made, make it an
 
 **Withdrawing is allowed.** If a finding does not survive closer reading, mark it Withdrawn with the reason. An honest withdrawal is a resolution. Letting it disappear is not.
 
-After the pass, report how many sentences were removed or merged and the approximate before/after word count. Word count is not the measure of success: replacing a hollow sentence with a grounded one is a win even when the count rises, so say which movements were cuts and which were substitutions.
+After the pass, re-measure reading time for a blog post. If it's still over the 14-minute budget, keep working through the Step 8 focusing methods before writing the ledger. Report how many sentences were removed or merged, the before/after word count, and for a blog post the before/after reading time. Word count is not the measure of success: replacing a hollow sentence with a grounded one is a win even when the count rises, so say which movements were cuts and which were substitutions.
 
 ### Step 12 — Disposition ledger
 
