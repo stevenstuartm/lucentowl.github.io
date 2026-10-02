@@ -140,6 +140,14 @@ Compensations therefore have to be retriable, which means they have to be idempo
 <p><strong>The window is visible to everyone.</strong> The system is inconsistent for as long as the saga runs, which can be seconds or, where a step waits on a human or an external provider, considerably longer.</p>
 </div>
 
+### Common Saga Mistakes
+
+**Splitting data that one business rule depends on.** Every state a saga passes through is visible to other work while it runs, so each one has to be true in business terms. An order that is "paid, awaiting shipment" or a seat that is "held" is a real state, and anyone who reads it mid-saga acts correctly, however long the saga takes. Compare a Payments service that records a payment with an Accounts service that then updates the balance. Between the two steps the balance is wrong, and a withdrawal approved or declined in that window is decided on a false number. A faster retry or a better compensation doesn't help, because the damage happens when someone reads the state, not when the saga fails. Name every in-between state in words the business would use. If one has no such name, either keep those steps in one service under one transaction, or make the in-between state a real one, the way banks show a card authorization as "pending" with its own rules for expiry.
+
+**Committing a step and publishing its event separately.** A step that commits its local transaction and then publishes "done" can crash in between, and the saga never hears about a change that happened. Publishing first announces a change that may never commit. The transactional outbox closes the gap by writing the event to a table in the same local transaction and publishing it from there afterward.
+
+**Letting stalled sagas sit unseen.** A saga waiting on a step that will never finish looks the same as one that is merely slow. Without a timeout on each step and someone watching for sagas that pass it, stuck items pile up in a dead letter queue until a customer reports one. Give each saga state a maximum age and an owner who acts when it's exceeded.
+
 ---
 
 ## Quick Reference

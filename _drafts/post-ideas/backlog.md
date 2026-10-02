@@ -35,6 +35,7 @@ Ideas the author rejected. Research never proposes these again, or close variant
 
 | ID | Working title | Declined | Reason |
 | --- | --- | --- | --- |
+| `feature-flags-configuration-with` | Feature Flags Are Configuration With a Deadline | 2026-10-02 | Superseded after drafting by `entitlement-not-feature-flag`: stale-flag cleanup is well-covered ground, and the larger problem is flags standing in for a missing entitlement domain. The draft's permission-flag row endorsed the pattern the new post argues against |
 | `certificate-expiry-scheduled` | Certificate Expiry Is an Outage You Scheduled | 2026-09-29 | Uncontested: nobody argues that expiring certificates are fine, and the fix fits in a paragraph |
 | `estimates-inside-view` | Estimates Fail Because We Estimate From the Inside | 2026-09-29 | Derivative: restates Kahneman and Flyvbjerg on the planning fallacy without a new argument |
 | `bug-fixes-took-months` | Bug Fixes Took Months Because of the Calendar | 2026-09-29 | Already done: the Shaped Kanban post covers organizing work around completion instead of the calendar |
@@ -60,6 +61,9 @@ Ideas the author rejected. Research never proposes these again, or close variant
 | `timeouts-nobody-chooses` | Timeouts Are the Config Nobody Chooses | 2026-09-30 | Tired subject: deadline propagation is standard Builders' Library and gRPC guidance |
 | `idempotency-is-a-contract` | Idempotency Is a Contract, Not a Retry Setting | 2026-09-30 | Tired subject: idempotency keys are thoroughly covered by Stripe, AWS, and the IETF draft |
 | `health-checks-cascade` | Health Checks That Check Dependencies Cause Cascades | 2026-09-30 | Tired subject: "liveness probes shouldn't check dependencies" is standard Kubernetes and Builders' Library advice |
+| `buy-vs-build-rent-authority` | Buy vs Build Is Really Rent vs Own Authority | 2026-10-02 | Tired subject, declined after drafting: drafted only to test the subject's depth, and it fell within the tired-subject bar already set; buy vs build and vendor lock-in are well-worn, and its relicensing core overlaps the declined `open-source-relicensing-risk` |
+| `coverage-not-effectiveness` | Coverage Measures What Ran, Not What Was Checked | 2026-10-02 | Tired subject, declined after drafting: drafted only to test the subject's depth, and it fell within the tired-subject bar already set; coverage is not effectiveness is well-worn (Inozemtseva and Holmes 2014, mutation testing) |
+| `distributed-transactions-boundary-bug` | Distributed Transactions Are a Boundary Bug | 2026-10-02 | Tired subject, declined after drafting: "if you need distributed transactions, your boundaries are wrong" is settled advice (Garcia-Molina and Salem 1987, Helland 2007, Vernon 2011), and the draft restated it without a clear thesis. Its one usable point, that every in-between state of a saga must be a true business state, went into the Orchestration and Choreography guide's Common Saga Mistakes |
 | `control-plane-outages` | Cloud Outages Are Control-Plane Outages | 2026-09-30 | Tired subject: static stability is AWS's own published guidance, and post-outage commentary repeats it |
 | `migration-locks-production` | Your Migration Tool Doesn't Know It's Locking Production | 2026-09-30 | Tired subject: lock-safe migrations are documented by strong_migrations, GitLab, and the Postgres docs |
 | `time-ordered-keys` | Random Primary Keys Cost More Than You Think | 2026-09-30 | Tired subject: UUIDv7 vs random UUIDs has been argued to exhaustion |
