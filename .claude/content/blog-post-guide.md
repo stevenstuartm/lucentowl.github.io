@@ -106,7 +106,7 @@ This rule is non-negotiable and applies to all narrative blog content.
 
 All universal rules in [writing-standards.md](../../skills/refine-prose/writing-standards.md) apply. Blog posts additionally require:
 
-**Length**: aim for a reading time of about 14 minutes or less, which is under 3,000 words once markup is stripped (the post layout shows words ÷ 200). Make each point once, in the section that argues it. Later sections, the intro, and the conclusion refer back to it and don't restate it. `/review-publishable` measures the budget and enforces it. Case studies and guides have no fixed budget.
+**Length**: aim for a reading time of about 14 minutes or less, which is under 3,000 words once markup is stripped (the post layout shows words ÷ 200). Make each point once, in the section that argues it. Later sections refer back to it and don't re-argue it. An intro that states the problem in a sentence, or a conclusion that lands the point, isn't a restatement, because it orients the reader rather than repeating the case. `/review-publishable` measures the budget and enforces it. Case studies and guides have no fixed budget.
 
 **Introductions** should be personal and relatable — see the "Blog Post Voice" section in writing-standards.md for the voice balance guidance and examples.
 

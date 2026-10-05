@@ -46,12 +46,32 @@ The most common way this command fails is by producing an impressive list of pro
 | `A#` | Step 9 | Practical artifact |
 | `T#` | Step 10 | Title |
 
-**Classify every finding as you raise it.** There are two classes, and the first one is the default:
+**A finding needs a defect you can state.** Before raising anything, write down the specific way a reader fails on the current text. It has to be one of these:
 
-- **FIX** — you can write a version you would defend, so you write it **into the file** in Step 11. This covers everything: cuts, rewrites, new sections, new tables, restructured headers, a changed title, a rebuilt front matter field. Scope of the change is not a reason to downgrade. Deleting a whole section is a FIX if the evidence does not support it.
-- **ASK** — applying it would require inventing something you do not have: a personal experience, a number only the author knows, a claim you cannot verify from a source. Leave that text as it stands and put the question in the ledger.
+- A factual error, a misquote, or a wrong attribution
+- A mechanical rule hit (linter pattern, link rule, front matter field)
+- A claim with no support or source, or a fabricated experience
+- An ambiguity, where you can write out two different readings a careful reader could take
+- A structural break, such as headers that don't tell the argument or a section that contradicts the thesis
+- A length budget overrun
 
-**ASK is the rare case, not the safe one.** Strategic calls about scope, structure, and emphasis are FIX. Make the call you would defend, apply it, and say plainly in the ledger what you decided and why, so the author can overrule you by looking at the result rather than by imagining it.
+These are **not** defects, and they are never findings:
+
+- Deliberate abstraction, especially in introductions and conclusions, where a sentence frames or summarizes what the body argues in detail
+- The author's voice, rhythm, word choice, or closing lines
+- A sentence you would have phrased differently, or think could be "tighter" or "more specific", when no reader would misread it
+- A summary sentence that previews or recaps the body. Previews and recaps orient the reader, so they aren't restatements to cut
+
+If you can't state the defect in one sentence that names what a reader would get wrong, don't raise the finding. Your rewrite of a sentence that has no defect is almost always worse than the author's original, because it trades the author's intent for yours.
+
+**The edit is no bigger than the defect.** Fix the comma, the misquote, the overstated clause, or the ambiguous word. Don't rewrite the surrounding sentence or paragraph to fix it. If the only fix you can see means rewriting the author's framing, raise it as ASK instead.
+
+**Classify every finding as you raise it.** There are two classes:
+
+- **FIX** — the defect is stated and the fix touches only the defect, so you write it **into the file** in Step 11. Factual corrections, mechanical fixes, sourcing, removing an unsupported claim, and bringing a post under budget are FIX.
+- **ASK** — applying it would require inventing something you do not have (a personal experience, a number only the author knows, a claim you cannot verify), or the fix would change the author's framing, emphasis, structure, or voice. Leave that text as it stands and put the question in the ledger, with the defect stated.
+
+**Strategic calls are the author's.** Reordering sections, adding a table or section, cutting a section, and changing emphasis are ASK unless the defect is a rule violation (such as a budget overrun). Describe the proposed change and the defect it fixes in one or two lines, and don't build it.
 
 **Never hand the author text to paste.** A replacement paragraph sitting in the chat report is not a resolution. The author cannot evaluate a paragraph without the paragraphs around it, cannot see how a new section changes the post's balance, and cannot read a header tree in isolation. Work that the author has to reassemble by hand has been moved, not done.
 
@@ -155,7 +175,7 @@ A post over budget is an `L#` finding, and it's a FIX. Bring it under budget in 
 4. **Compress the conclusion to what the body hasn't already said.** The answers or recommendations carry new material, and the diagnosis is already on the page.
 5. **Trim secondary evidence last.** Keep at least one source per claim, and cut a second quote or a supporting detail only after steps 1-4 have run out.
 
-Never cut the post's examples, its sources for claims it still makes, or any section the header tree depends on just to hit a number. If the post can't fit the budget without losing its argument, the scope is too broad. Raise that as a Decided finding that splits or narrows the post, and don't thin every section evenly.
+Never cut the post's examples, its sources for claims it still makes, or any section the header tree depends on just to hit a number. If the post can't fit the budget without losing its argument, the scope is too broad. Raise that as an ASK that proposes how to split or narrow the post, and don't thin every section evenly.
 
 ### Step 9 — Practical artifact check
 
@@ -166,7 +186,7 @@ Assess:
 - If yes, is it clearly presented, or buried in the body prose where it's easy to miss?
 - If no, identify what artifact would best fit the post's thesis and suggest it. Be specific: name the format and describe the content it should contain.
 
-Do not edit the file during this step; resolution happens in Step 11. But a missing artifact is a FIX, never a bare flag. In Step 11 you build the actual table, checklist, or framework, populated with this post's real content, and you place it in the file. An artifact that is present but buried is also a FIX, whether it needs reformatting into a table or rebuilding from scratch.
+Do not edit the file during this step; resolution happens in Step 11. A missing or buried artifact is an ASK, because adding one changes the post's structure and length. Propose it specifically in the ledger: the format, what it would contain from this post, and where it would go. Don't build it.
 
 ### Step 10 — Search-discoverable title
 
@@ -186,9 +206,9 @@ Raise the title as `T1`. If the current title is inaccurate, clickbait, over-ind
 
 Work the ledger, not your memory. Take every finding from Steps 2-10 in ID order and discharge it according to its class. Do not ask for approval on individual edits.
 
-**FIX findings** — edit the file directly. This is nearly all of them. The prose reduction sweep below is one category of this work, not the whole of it.
+**FIX findings** — edit the file directly, touching only the defect.
 
-Cut on sight:
+When the post is over budget, or a finding is a stated restatement, these are the cuts to reach for:
 - **Restatements**: a sentence that repeats what the previous sentence already said in different words
 - **Announcement sentences**: sentences whose only function is to introduce what follows ("Here is what X does:", "The following section covers...")
 - **Redundant closers**: a sentence at the end of a paragraph that summarizes what was just established in that same paragraph
@@ -202,7 +222,7 @@ Do not cut:
 
 Cutting an unsupported assertion and leaving a hole makes the post worse, not better, so when a cut removes load-bearing content, write the replacement into the same edit.
 
-Where a finding turns on a decision you would rather the author made, make it anyway, apply it, and record the decision and your reasoning in the ledger. Give the alternative you rejected in one line so they can reverse you deliberately. What you must not do is stop and wait: a review that ends with open questions and an unchanged file has produced nothing the author can read.
+Where a finding turns on a decision the author should make, it is an ASK. State it in the ledger and keep working through the rest. Don't stop and wait.
 
 **ASK findings** — leave the text as it stands and state the question in the ledger. Do not invent the answer, and do not apply a placeholder. If the post needs a number only the author has, or a first-person experience claim the site's rules forbid you from fabricating, that gap is theirs to fill and the surrounding prose stays untouched until they do.
 
@@ -227,11 +247,11 @@ Every row ends in one of four states, and no others:
 | State | Meaning |
 | --- | --- |
 | **Fixed** | Edited into the file during Step 11 |
-| **Decided** | Fixed, where the fix rested on a judgment call; the ledger names the call and the rejected alternative |
+| **Decided** | Fixed, where the fix to a stated defect rested on a judgment call; the ledger names the call and the rejected alternative |
 | **Asked** | Text left untouched because applying it would mean inventing a fact; the question is stated |
 | **Withdrawn** | Reconsidered and dropped, with the reason given |
 
-"Noted", "flagged", "mentioned", "worth considering", "left as-is", and "drafted for your review" are not states. Three of the four states above mean the file changed. If most of a review's findings end in Asked, the review was too timid, not the post too ambiguous.
+"Noted", "flagged", "mentioned", "worth considering", "left as-is", and "drafted for your review" are not states. Three of the four states above mean the file changed. A review with few findings is a good outcome when the post has few defects. Don't pad the ledger with taste.
 
 ---
 
@@ -254,7 +274,7 @@ Deliver the report in this exact structure:
 ```
 [H2 and H3 header tree, indented]
 ```
-Pass / Fail — [1-2 sentences explaining why. On a fail, raise it as `O1`: a header tree you can rewrite is one you must rewrite into the file in Step 11. Show the old and new trees in the report so the change is legible at a glance.]
+Pass / Fail — [1-2 sentences explaining why. On a fail, raise it as `O1` with the defect stated. Rewording a header so it states its section's claim is a FIX. Reordering or restructuring sections is an ASK, so show the proposed tree beside the current one in the report and leave the file's structure alone.]
 
 **CLARITY ISSUES**
 [Numbered list. Each item: ID, class, section name, quoted passage or description of the problem, and what is unclear and why. If none, say "None found."]
@@ -290,7 +310,7 @@ Raised: N · Dispositioned: N
 | ID | Finding | Class | State | Resolution |
 | --- | --- | --- | --- | --- |
 | `O1` | Headers name topics, not claims | FIX | Fixed | Tree rewritten |
-| `C2` | Cherry-picked examples don't support the claim | FIX | Decided | Section cut; kept alternative was sourcing it |
+| `C2` | Cherry-picked examples don't support the claim | ASK | Asked | Proposed cutting the section or sourcing the claim |
 | `S1` | No acknowledgment of limits | FIX | Fixed | Limits section added |
 | `X1` | Intro needs first-person the author must own | ASK | Asked | Left as-is; experience claim is theirs to make |
 

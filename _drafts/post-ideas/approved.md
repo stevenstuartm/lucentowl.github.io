@@ -22,10 +22,8 @@ Ideas the author approved, waiting for a draft, oldest approval first. When a dr
 | `soft-deletes-lie-schema` | Soft Deletes Are a Lie Your Schema Tells | 2026-09-30 | `_drafts/soft-deletes-lie-schema.md` |
 | `replica-lag-read-your-writes` | Read Replicas Make Your Reads Lie | 2026-09-30 | `_drafts/replica-lag-read-your-writes.md` |
 | `onboarding-time-measures-architecture` | What Developer Onboarding Time Says About Your Architecture | 2026-09-30 | `_drafts/onboarding-time-measures-architecture.md` |
-| `entitlement-not-feature-flag` | Entitlements Are a Domain, Not a Feature Flag | 2026-10-02 | `_drafts/entitlement-not-feature-flag.md` |
 | `serverless-cheap-be-wrong` | Serverless Is Cheap to Be Wrong With | 2026-09-30 | `_drafts/serverless-cheap-be-wrong.md` |
 | `migration-tools-keep-code` | Migration Tools Keep the Code and Lose the Intent | 2026-09-30 | `_drafts/migration-tools-keep-code.md` |
-| `local-first-authority` | Local-First Software Moves Authority to the Device | 2026-09-30 | `_drafts/local-first-authority.md` |
 | `monorepo-vs-polyrepo-about` | Monorepo vs Polyrepo Is About Who Owns Change | 2026-09-30 | `_drafts/monorepo-vs-polyrepo-about.md` |
 | `windows-ui-framework-lessons` | Why WPF Outlived Every Windows UI Framework Offered in Its Place | 2026-09-30 | `_drafts/windows-ui-framework-lessons.md` |
 | `memory-safety-mandates` | What Memory-Safety Guidance Means for Managed Code | 2026-09-30 | `_drafts/memory-safety-mandates.md` |

@@ -17,6 +17,13 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: entitlement-not-feature-flag
+  change: new
+  type: post
+  title: "Entitlements Are a Domain, Not a Feature Flag"
+  url: /blog/2026/10/05/entitlements-are-a-domain-not-a-feature-flag.html
+  note: "Why deciding which customers are owed a feature doesn't belong in a flag service, when a flag can stand in anyway, and how client apps should get the answer."
+
 - id: api-gateway-shouldnt-know
   change: new
   type: post

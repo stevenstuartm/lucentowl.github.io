@@ -40,6 +40,7 @@ Produces new ideas, scores them, and places each one in the backlog or review.
 2. **Generate candidates.** Default to 20, or the requested count, on the focus if one was given. Without a focus, spread across the domains and growth edges in authority bounds, and favor under-covered ones. Frame each candidate as a research question with a hypothesis that the research could overturn. Aim at the rubric's benchmark: mechanisms readers can check in their own systems.
 3. **Screen.** Drop any candidate that:
    - restates a published post, a list entry, or a declined idea (compare theses, not titles)
+   - only applies one of the site's principles (a throughline move, committed position, or owned framework) to a new domain that the earlier posts already cover in spirit, without a mechanism or finding the principle alone would not predict
    - contradicts a committed position without a deliberate reversal, which must be noted
    - borrows a framework, score, or coined term without naming the source (see [`derivation-check.md`](../content/derivation-check.md)); name the prior art in the Note instead
 4. **Check the evidence leads.** When web search is available, confirm that each named lead exists and that its author, year, and venue are right. Mark any lead you can't confirm as "(unverified)". This checks that the leads are real, not that the hypothesis holds. The investigation belongs to the post.
@@ -58,7 +59,7 @@ Re-scores existing ideas against the current rubric and rebalances review.
 
 1. **Log calibration first.** If the invocation or recent conversation carries new guidance on what makes an idea good, append a dated row to the rubric's Calibration Log that quotes the guidance and states its effect on scoring. Then re-read the rubric.
 2. **Choose the scope.** Default: backlog and review. `backlog` or `review` restricts re-scoring to that list, though rebalancing still compares across both. Never re-rank approved ideas.
-3. **Score fresh.** Score each idea in scope against the rubric before looking at its old score, then compare. For a backlog row, score from its title, question, and hypothesis, and read its Detail entry if it has one.
+3. **Score fresh.** Score each idea in scope against the rubric before looking at its old score, then compare. Flag in Notes any idea the rubric's principle duplicate test catches, so the author can decline it. For a backlog row, score from its title, question, and hypothesis, and read its Detail entry if it has one.
 4. **Rebalance.** Review holds the top 20 across both lists, subject to the entry bar and tie rules.
    - **Promote:** write the full entry for each idea entering review, including evidence leads (checked as in research step 4). If the idea has a Detail entry in the backlog, start from it and remove it from Detail.
    - **Demote:** an idea leaving review gets a backlog row with a one-sentence hypothesis, and its full entry moves under Detail.

@@ -56,7 +56,7 @@ Across the 31 posts and the seven disciplines on the Philosophy page, one argume
 
 > **Most engineering failures are misplacements: a decision made at the wrong time, a responsibility put in the wrong place, or a practice followed for its own sake instead of for what it buys.**
 
-The posts express it in three recurring moves. A post idea that uses one of them is on-voice by default.
+The posts express it in three recurring moves. A post idea that uses one of them is on-voice by default, but on-voice is not enough: a move carried to one more domain, when the earlier posts already make that application clear, restates the site rather than extending it (see the rubric's principle duplicate test).
 
 | Move | What it does | Posts that use it |
 | --- | --- | --- |
