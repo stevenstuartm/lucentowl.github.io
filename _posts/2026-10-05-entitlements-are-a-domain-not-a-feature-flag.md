@@ -2,7 +2,7 @@
 layout: post
 title: "Entitlements Are a Domain, Not a Feature Flag"
 date: 2026-10-05
-description: "Feature flags decide how code behaves. Entitlements decide which customers are owed a feature, a business domain whose owner, audit trail, and fallback rules a flag service can't hold, least of all once the decision reaches client apps."
+description: "Gating paid features with flag segments is easy to start and hard to undo. Which customers are owed a feature is a commercial decision that needs its own owner, audit trail, and offline rules, so it belongs in its own domain. A flag can hold it only as a deliberate stopgap, with an owner and a written trigger for replacing it."
 tags: [feature-flags, entitlements, domain-boundaries, authority, client-architecture, technical-debt]
 author: steven-stuart
 sources:
@@ -40,7 +40,7 @@ sources:
     url: "https://docs.growthbook.io/lib/js"
 ---
 
-It usually starts with one feature. The product team wants the new reporting dashboard available only on the enterprise plan, and there's no plan model in the code yet. The flag service is already wired in and supports targeting, and a segment called `enterprise-customers` takes ten minutes to set up. A year later there are a dozen such segments, sales asks engineering to add tenants to them when deals close, and support checks the flag dashboard to answer "why can't this customer see reports?" Most people involved feel the strain. Every grant goes through engineering, the code knows plans only as segment names, billing and access drift apart, and an audit finds only a change log. But there's no clear way back.
+It usually starts with one feature. The product team wants the new reporting dashboard available only on the enterprise plan, and there's no plan model in the code yet. The flag service is already wired in and supports targeting, and a segment called `enterprise-customers` takes ten minutes to set up. A year later there are a dozen such segments. Every grant now goes through engineering, the code understands plans only as segment names, billing and access drift apart, and change logs are not sufficient to audit the proper state of customer product access. Most people involved feel the strain, but there's no clear way back.
 
 I think the way back starts with seeing that this was never a flag decision. Release toggles, experiments, and kill switches are decisions about how code behaves, made by the people who build and run it. Deciding which customers are owed a feature is a commercial decision, and it belongs to a business domain with its own owner, policies, and audits. Beyond the more obvious server-side and operational issues, a solution needs to also reconcile the potential reality of client-side apps, which can quickly accelerate the pain and complicate a solution.
 
@@ -50,7 +50,7 @@ Feature flags grew out of continuous integration and trunk-based development. So
 
 Experiments and kill switches use the same per-request switch, and each still decides something about the code, either which version should ship or whether it should run right now.
 
-The test is who the decision answers to. When the team that builds and runs the product decides how the code should behave, it's a feature flag, even when a product manager runs the experiment, because no customer is owed the variant they landed in. When sales, finance, or a contract decides who gets a feature, it's an entitlement that happens to use a flag. A flag service can still carry that answer, but then it runs one department's decisions through a tool built for another's.
+When the team that builds and runs the product decides how the code should behave, it's a feature flag, even when a product manager runs the experiment, because no customer is owed the variant they landed in. When sales, finance, or a contract decides who gets a feature, it's an entitlement that happens to use a flag. A flag service can still carry that answer, but then it runs one department's decisions through a tool built for another's.
 
 ## The Standard References Treat Entitlement as a Flag Type
 
@@ -62,7 +62,7 @@ A 2020 interview study by Meinicke, Wong, Vasilescu, and Kästner shows teams dr
 
 ## What a Flag Service Can't Do When It Holds the Entitlement
 
-When grants are written straight into the flag service, each of its design choices is sensible for a release decision and wrong for a commercial one.
+When grants are written straight into the flag service, each of its design choices is likely sensible for a release decision and wrong for a commercial one.
 
 ### No Single Fallback Is Right for Every Customer
 
@@ -70,7 +70,7 @@ Flag clients are built to never break the application. OpenFeature, a vendor-neu
 
 For an entitlement there's no safe default. LaunchDarkly's entitlements guide warns that if the application can't connect, "all of your end users will receive a single fallback variation." Default to off, and every enterprise customer loses what they bought. Default to on, and every free customer gets it. The guide's mitigation is its Relay Proxy, a self-hosted cache of flag data with a persistent store, which gives server-side apps the last known state, but a client app that starts with nothing cached still gets the single fallback.
 
-An entitlement service can fail too, and a client that has never reached it has nothing cached either. A flag's fallback is one value written into the code, and how long its cached values count is the vendor's rule. An entitlement's fallback is a policy the plan owner sets, including how long a cached grant still counts. RevenueCat, which manages in-app subscriptions, sets its own, so an entitlement active when a device went offline "will remain active for up to three days."
+An entitlement service can fail too, so the difference isn't whether there's a fallback but who sets it. A flag's fallback is one value written into the code, and how long its cached values count is the vendor's rule. An entitlement's fallback is a policy the plan owner sets, including how long a cached grant still counts. RevenueCat, which manages in-app subscriptions, sets its own, so an entitlement active when a device went offline "will remain active for up to three days."
 
 ### A Change Log Isn't an Audit Trail
 
@@ -104,7 +104,7 @@ Engineering's usual reason to keep unproven code behind a flag is the ability to
 
 ### Every Exit Removes the Flag
 
-I think this case is a legitimate use of a flag, declared as intentional technical debt and owned by product and sales rather than engineering. What separates it from Hodgson's multi-year permissioning toggles is that it has a decision point, and every way out of that decision removes the flag:
+Neither problem goes away, but both can be accepted on purpose. Making an unproven feature that one contract requires into a plan feature would be premature, and the flag keeps the code isolated until the open question is answered. I think that makes this case a legitimate use of a flag, declared as intentional technical debt and owned by product and sales rather than engineering, since the off switch and the outage fallback are now their risks to carry. What separates it from Hodgson's multi-year permissioning toggles is that it has a decision point, and every way out of that decision removes the flag:
 
 - **Another customer wants it.** The grant moves into the entitlement model as a plan feature, and the flag goes away.
 - **It becomes standard.** The code path becomes permanent and the flag is deleted.
@@ -176,12 +176,7 @@ The facade has its own tradeoffs. An experiment needs a record of which version 
 
 ## A Flag Can Stand In When the Gap Is Written Down
 
-None of this means a startup with one paid tier needs an entitlement service on day one. Holding product access in a flag is a hack, and the only good reason for it is a timeline or budget that would otherwise block delivery. Even then it's a cost, because paying it off means refactoring the code and migrating the grants, so someone should decide it on purpose and write down that the flag is standing in for an entitlement domain, who owns that gap, and what will trigger paying it off. Good triggers are concrete:
-
-- A second paid plan
-- A second customer asking for a contract feature
-- The first billing dispute that turns on what the flag said
-- The first client app that needs to know what a tenant is owed
+None of this means a startup with one paid tier needs an entitlement service on day one. Yet, I think that holding product access in a flag is still a hack, and the only good reason for it is a timeline or budget that would otherwise block delivery. Even then it's a cost, because paying it off means refactoring the code and migrating the grants, so someone should decide it on purpose and write down that the flag is standing in for an entitlement domain, who owns that gap, and what will trigger paying it off.
 
 Unstated, the gap compounds. Each segment and sales exception adds to a later migration, each client build that reads entitlements from the vendor's SDK adds a contract you can't recall, and the flag service keeps gaining authority because nobody recorded that it was never supposed to have any.
 
