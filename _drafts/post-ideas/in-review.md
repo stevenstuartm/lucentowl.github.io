@@ -23,96 +23,114 @@ Evidence lines are research leads, not verified citations.
 - **Experience:** API gateways in front of banking and financial research services, if the author has seen a gateway and a service disagree
 - **Reader's check this week:** Send `{"amount": 1, "amount": -1}` through your gateway or validator to your service and see which value each one uses. In .NET, check whether `AllowDuplicateProperties` is false. Grep identity lookups for `ToLower()` or culture-sensitive comparisons on emails and usernames.
 - **Hook:** Your validator approved the request. Your service executed a different one.
-- **Note:** Request smuggling and cache deception are well known in security circles, so the post can't just retell them. What it adds is the unifying mechanism, and an architecture fix (one interpreter of record) rather than a per-bug patch. Pairs with the Topology post's legitimacy argument.
+- **Note:** Request smuggling and cache deception are well known in security circles, so the post can't just retell them. What it adds is the unifying mechanism, and an architecture fix (one interpreter of record) rather than a per-bug patch. Pairs with the Topology post's legitimacy argument. Distinct from the API gateway post, which is about business rules in the gateway, not parsing. Standards sweep 2026-10-06: kept, but the unifying mechanism already has a name in the LangSec community ("parser differentials": Sassaman, Patterson, Bratus), so the post must credit it and stand on the architecture fix. If LangSec already prescribes one interpreter of record for gateway-and-service stacks, decline it.
 - **Could change if:** The cases turn out to need unrelated fixes, so that "one interpreter" doesn't help across them. Or strict parsing at every hop proves cheaper and more reliable than passing a parsed result, which would make the post a hardening checklist rather than an authority argument.
 
-## 2. `compatibility-window-oldest-reader`: Your Compatibility Window Is Set by Your Oldest Reader
+## 2. `log-waits-slowest-reader`: Your Replica Isn't Isolated From Your Primary
 
-- **Research question:** How long must a change stay backward compatible, and who actually sets that window: the deploy, the client, or the data?
+- **Research question:** When a read replica, a CDC connector, or a stream consumer falls behind or holds a long read, what does the primary do on its behalf, and who decided that?
 - **Origin:** R
-- **Scores:** U 5, D 4, S 5, E 4 = **18**
-- **Hypothesis:** Teams size compatibility by their deploy (minutes of rolling overlap), but the real window is set by the longest-lived reader. That might be a browser tab holding an old bundle for days, a desktop or mobile client that updates on its own schedule, or an event replayed from a topic retained for months. Most upgrade failures come from data and message format incompatibility in that window, not from the code change itself.
+- **Scores:** U 5, D 4, S 5, E 5 = **19**
+- **Hypothesis:** Any reader whose position the primary must preserve makes the primary keep history for it, so the primary's health is bounded by its slowest reader. A long report on a Postgres standby with `hot_standby_feedback` holds back vacuum on the primary. On an Aurora MySQL replica it grows the writer's undo history. On a SQL Server readable secondary it blocks ghost cleanup on the primary. An abandoned logical replication slot keeps WAL until the disk fills. Systems that don't wait drop the reader instead: Kafka expires idle consumer-group offsets and `auto.offset.reset` silently skips or replays. Every log makes this choice between primary availability and reader completeness. The defaults make it differently per engine, and usually nobody on the team has made it on purpose.
 - **Evidence:**
-  - Zhang et al., "Understanding and Detecting Software Upgrade Failures in Distributed Systems" (SOSP 2021): a study of upgrade failures in distributed systems, plus DUPTester, which found 20 new ones
-  - Vercel Skew Protection (2023): old client bundles calling new server code
-  - Confluent Schema Registry compatibility modes: the default `BACKWARD` checks only against the latest schema, not every retained version (`BACKWARD_TRANSITIVE`)
-  - Kubernetes version skew policy, as a published example of a stated window
-  - Kleppmann, *Designing Data-Intensive Applications*, chapter 4 (encoding and evolution)
-- **Lens and backing:** Price the timing. The cost of a format change lasts as long as its oldest reader. Backing: Your Reads Should Not Design Your Writes (`/blog/2026/09/14/your-reads-should-not-design-your-writes.html`), the API versioning guide (`/study-guides/dotnet/asp/aspnet-versioning-openapi.html`), deployment-strategies and event-driven-architecture guides, the CQRS/event-sourcing loan servicing case study
-- **Experience:** A WPF point-of-sale fleet in hundreds of stores and Vue SPAs in production, both readers that outlive a deploy
-- **Reader's check this week:** Find your oldest live reader. That's the oldest client version in your request logs, the age of the oldest open SPA session, or the retention on your event topics. Then check whether your schema registry's compatibility mode is transitive.
-- **Hook:** Your deploy finished in four minutes. Your compatibility window is still open from March.
-- **Note:** Expand/contract migrations and tolerant readers are standard advice. The new parts are naming the window by its oldest reader, the SOSP failure data, and the non-transitive registry default. Pairs with `enums-breaking-change` in the backlog.
-- **Could change if:** The SOSP data shows most upgrade failures come from code or config rather than format and state, or long-lived readers turn out to be rare in practice once versioned APIs are in place.
+  - AWS, "Aurora MySQL isolation levels" and the "InnoDB history list length increased significantly" proactive insight: long-running queries on Aurora Replicas cause purge lag on the writer; `aurora_read_replica_read_committed` as the mitigation
+  - Microsoft Learn, "Active Secondaries: Readable Secondary Replicas": read workloads on a secondary map to snapshot isolation, and long transactions there defer ghost and version cleanup on the primary
+  - PostgreSQL docs: `hot_standby_feedback`, `max_slot_wal_keep_size` (PostgreSQL 13), and `idle_replication_slot_timeout` (PostgreSQL 18, default disabled)
+  - Apache Kafka KIP-186 (Kafka 2.0): offsets retention raised from 1 day to 7 because consumers offline longer than retention lost their offsets and fell back to `auto.offset.reset`
+  - Debezium documentation on WAL growth from stopped PostgreSQL connectors
+- **Lens and backing:** Relocate authority. A downstream reader gains authority over the primary's availability without anyone granting it. Backing: Reporting and Production Make Terrible Roommates (`/blog/2026/03/11/reporting-and-production-make-terrible-roommates.html`), the replication-and-consistency guide (`/study-guides/data/replication-and-consistency.html`), the messaging patterns guide
+- **Experience:** Aurora, SQL Server, and Snowflake offload in production, if the author has seen a reporting replica or CDC pipeline slow the writer
+- **Reader's check this week:** Find the longest-running query on your read replica and check whether it holds back cleanup on the primary (`hot_standby_feedback`, `RollbackSegmentHistoryListLength`, or ghost cleanup on an AG primary). List every replication slot or CDC consumer, and check what `max_slot_wal_keep_size` or log-reuse wait says happens if it stops. For Kafka, compare `offsets.retention.minutes` with your longest planned consumer outage, and check `auto.offset.reset`.
+- **Hook:** You moved reporting to a replica to protect the primary. The replica can still reach back into it.
+- **Note:** Corrects a claim in the site's own reporting post, which offers a dedicated reporting replica as a way to keep analytical queries "from competing with production traffic". The committed position (separate models for reporting and production) stands, and this strengthens it, but the post should say plainly that it revises that line. Replication lag itself was declined as guide material (`replica-lag-read-your-writes`). This idea is about the opposite direction, the reader's pressure on the writer, which the lag literature doesn't cover. Each engine's behavior is documented separately. The cross-engine mechanism and the "every log must choose" framing are the contribution.
+- **Could change if:** The engines' defaults turn out to already bound the damage well enough (feedback off by default, slot limits common in managed services), so that the problem is a rare misconfiguration rather than a default most teams run with.
 
-## 3. `load-tests-closed-loop`: Your Load Test Can't Find the Load That Breaks You
+## 3. `reclaimable-names`: Every Name You Release Can Be Claimed by Someone Else
 
-- **Research question:** Do common load-testing setups model how real traffic arrives, and what do they hide when they don't?
+- **Research question:** How often do systems keep trusting a name (a bucket, a domain, a package, a repository) after its owner lets it go, and what does a new owner get?
 - **Origin:** R
-- **Scores:** U 5, D 4, S 5, E 4 = **18**
-- **Hypothesis:** Most load tests run a fixed pool of virtual users who wait for each response before sending the next request (a closed model). When the system slows, the test slows its own arrivals, so it can't reproduce the queueing collapse that open internet traffic causes. Teams pass load tests at a capacity they don't have. Switching to an arrival-rate (open) model changes the measured breaking point.
+- **Scores:** U 5, D 4, S 5, E 5 = **19**
+- **Hypothesis:** Systems refer to external resources by name, not by owner. When an owner deletes a bucket, lets a domain lapse, or removes a package, the references stay, and whoever registers the name next inherits the trust. Abandoned S3 buckets still served requests for executables and CloudFormation templates from government and Fortune 100 networks. Lapsed startup domains let a buyer sign in to former employees' SaaS accounts through Google OAuth. Deleted PyPI names were re-registered and shipped malware to existing dependents. Subdomain takeover is the long-known case of the same mechanism. The fix isn't a scanner for each namespace. Deleting a name has to count as a change to every system that references it, and references should bind to an owner (account ID, stable subject, pinned hash) wherever the platform allows.
 - **Evidence:**
-  - Schroeder, Wierman, and Harchol-Balter, "Open Versus Closed: A Cautionary Tale" (NSDI 2006)
-  - Grafana k6 documentation on open and closed models, including the constant-arrival-rate executors
-  - Gil Tene, "How NOT to Measure Latency" (talk), on coordinated omission
-  - Bronson et al., "Metastable Failures in Distributed Systems" (HotOS 2021), for what happens past the breaking point
-- **Lens and backing:** Name the real thing. A "load test" in a closed model is a throughput test that politely backs off. Backing: performance-engineering and performance_scalability_patterns guides, the reliability_patterns guide, and the retry-load-amplifier and unbounded-queue drafts once published
-- **Reader's check this week:** Open your load test config. Are you setting virtual users or an arrival rate? Rerun the same scenario with a constant arrival rate at your claimed capacity and compare p99 latency and error rate.
-- **Hook:** Your load test slows down when your system does. Your users don't.
-- **Note:** Coordinated omission is known among performance specialists, so the post should credit Tene and the NSDI paper and add the tool-level check. Pairs with `retry-load-amplifier` (drafted) and `unbounded-queue-outage` (drafted) as a resilience cluster.
-- **Could change if:** Tool defaults have moved to open models and most teams already use them, or the measured difference at realistic utilization is small.
+  - watchTowr, "8 Million Requests Later" (February 2025): about 150 abandoned S3 buckets re-registered for about $420, which then received over eight million requests in two months
+  - Truffle Security (Dylan Ayrey), Google OAuth and defunct startup domains (January 2025): sign-in to Slack, Notion, Zoom, and HR systems as former employees after buying the domain
+  - JFrog, "Revival Hijack" (September 2024): deleted PyPI project names re-registered, with over 22,000 packages exposed
+  - Aqua Security, repojacking research on renamed GitHub accounts (2023)
+  - Microsoft Learn, "Prevent dangling DNS entries and avoid subdomain takeover"
+- **Lens and backing:** Relocate authority. Authority over part of your system is held by whoever holds the name, and the name's registry decides who that is. Backing: Topology Is Not a Trust Model (`/blog/2026/06/19/topology-is-not-a-trust-model.html`), the S3 fundamentals guide (`/study-guides/infrastructure/aws/aws-s3-fundamentals.html`), the DNS guide, the devsecops guide
+- **Reader's check this week:** Grep your IaC, scripts, installers, and docs for bucket names, domains, and package names, and confirm you still own each one. List DNS records that point at cloud resources (CNAMEs to `*.cloudapp.net`, `*.s3.amazonaws.com`, and similar) and check the target still exists. Check whether your offboarding of a domain or bucket has any step besides "delete".
+- **Hook:** You deleted the bucket. Your installer still downloads from it, and someone else owns it now.
+- **Note:** Subdomain takeover and dependency confusion are well covered on their own. The idea earns its place only by unifying them as one mechanism with one architectural fix. If an existing body of work (for example watchTowr's "abandoned infrastructure" framing) already does that and proposes the same fix, the post must credit it or be declined. Pairs with `identity-key-not-email`: a lapsed domain is how the Truffle case reaches login.
+- **Could change if:** The platforms close the class themselves (account-scoped bucket namespaces, registries that never release names), which would shrink the post to a migration note.
 
-## 4. `bff-tokens-out-of-browser`: RFC 10017 Says Your SPA Shouldn't Hold Tokens
+## 4. `since-cursor-skips-rows`: Your "Changes Since" Query Silently Skips Rows
 
-- **Research question:** Now that the IETF has published its best current practice for browser-based OAuth apps, where should a single-page app's tokens live?
+- **Research question:** When a sync endpoint, outbox relay, incremental ETL, or projection reads "everything after the last ID or timestamp I saw", does it see every committed row?
+- **Origin:** R
+- **Scores:** U 5, D 4, S 4, E 5 = **18**
+- **Hypothesis:** Identity values, sequences, rowversions, and `updated_at` timestamps are assigned when a row is written, not when its transaction commits. Under concurrent writes, a reader that advances a high-water mark past a visible row can pass over a lower-numbered row whose transaction commits a moment later, and it never comes back for it. That loss is silent and permanent, and it hits outbox relays, incremental extracts, mobile sync, and event-store projections alike. The cursor has to be safe at commit time: SQL Server's `MIN_ACTIVE_ROWVERSION`, PostgreSQL's snapshot `xmin`, a CDC log position, or a deliberate lag window with gap detection.
+- **Evidence:**
+  - Microsoft Learn, `MIN_ACTIVE_ROWVERSION` (Transact-SQL): built for synchronization, because using `@@DBTS` "can miss changes that are active when synchronization occurs"
+  - Marten documentation on the async daemon's high-water mark and sequence gaps, and Marten discussion #4953 (projection progress advancing past committed events during concurrent appends)
+  - PostgreSQL `pg_current_snapshot()` and `pg_snapshot_xmin()`, and the pgsql-hackers threads on sequence order versus commit order
+  - Debezium and other log-based CDC tools as the commit-ordered alternative
+- **Lens and backing:** Name the real thing. A sequence number looks like commit order, but it's only allocation order. Backing: Reporting and Production Make Terrible Roommates (`/blog/2026/03/11/reporting-and-production-make-terrible-roommates.html`), the replication-and-consistency guide, the messaging patterns guide (outbox)
+- **Experience:** Snowflake loads and integration pipelines at TMI, if any used an ID or timestamp watermark
+- **Reader's check this week:** Grep for `WHERE Id > @last`, `RowVersion > @last`, or `UpdatedAt > @since` in sync, outbox, and ETL code. For each one, check whether the cursor comes from a commit-safe source or has a lag window and gap check. If not, two concurrent transactions committing out of order will reproduce the skip in a test.
+- **Hook:** Your incremental sync reads every row. Except the ones that committed late.
+- **Note:** Event-store and sync-framework authors know this mechanism well (it's why Marten tracks gaps). Application teams writing their own outbox relay or ETL watermark mostly don't. The post has to show it's common outside those libraries, not just restate their docs. Distinct from declined `replica-lag-read-your-writes`, which is about stale reads, not permanently skipped rows.
+- **Could change if:** Common outbox and ETL libraries already default to commit-safe cursors, so that only hand-rolled code is exposed, which would make the post a narrower warning.
+
+## 5. `identity-key-not-email`: The Claim You Key Users On Decides Who Can Become Them
+
+- **Research question:** When an app signs users in through an external identity provider, which claim does it treat as the user, and who controls that claim?
 - **Origin:** R
 - **Scores:** U 5, D 3, S 5, E 4 = **17**
-- **Hypothesis:** The tokens-in-JavaScript SPA pattern can't be made safe against an attacker who runs code in the page. Storage choice (memory, localStorage, a service worker) only changes what the attacker steals, not whether they can act as the user. A backend-for-frontend that keeps tokens server-side and gives the browser only a cookie session is the pattern that moves authority back behind the security boundary. Its cost is a stateful component the SPA was supposed to avoid.
+- **Hypothesis:** An external identity is the pair of issuer and subject. Email, tenant domain, and display name are attributes someone else controls: the IdP tenant's admin, the domain's next owner, or the user. Apps that key accounts or link logins on email hand account takeover to whoever can set that attribute. Apps that accept any tenant of a multi-tenant IdP let any of its users in. The nOAuth, BingBang, and lapsed-domain cases are the same failure: the app trusted an attribute as if it were an identity.
 - **Evidence:**
-  - RFC 10017, "OAuth 2.0 for Browser-Based Applications" (Parecki, De Ryck, Waite; BCP, August 2026), and its threat analysis
-  - RFC 9700, "Best Current Practice for OAuth 2.0 Security" (January 2025)
-  - RFC 9449, DPoP, as the sender-constrained alternative
-  - Philippe De Ryck's talks on why token storage choice doesn't stop a malicious script
-- **Lens and backing:** Relocate authority. It extends the committed position that auth sessions end at the security boundary out to the browser. Backing: Auth Sessions Should Never Be Transient Across Boundaries (`/blog/2025/10/10/auth-sessions-should-never-cross-boundaries.html`), Why JWTs Make Terrible Authorization Tokens (`/blog/2025/10/10/jwts-are-for-authentication-not-authorization.html`), identity-access-management and aspnet-auth guides, the zero-trust auth sessions case study
-- **Experience:** Vue and Nuxt apps in production, and five auth systems unified (case study)
-- **Reader's check this week:** Open your SPA's dev tools. Can page JavaScript read an access or refresh token, from storage, memory, or a network response? If so, list what an injected script could do with it before it expires.
-- **Hook:** The IETF just told you where your SPA's tokens belong. It isn't the browser.
-- **Note:** D is capped at 3 because the RFC itself makes the argument. The site's contribution is connecting it to the sessions-at-the-boundary position and pricing the BFF's statefulness honestly. Timely: the RFC is two months old.
-- **Could change if:** The RFC's analysis rates sender-constrained tokens (DPoP) in the browser as equivalent to a BFF for common threats, which would make the post about binding, not location.
+  - OpenID Connect Core 1.0, section 5.7: only `iss` and `sub` together are a stable identifier
+  - Descope, "nOAuth" (June 2023): Azure AD's mutable, unverified `email` claim used for account takeover in multi-tenant apps; Microsoft's guidance changes that followed
+  - Wiz, "BingBang" (March 2023): multi-tenant Azure AD apps accepting any tenant's users, with about 25% of scanned multi-tenant apps exposed
+  - Truffle Security, Google OAuth and defunct startup domains (January 2025)
+- **Lens and backing:** Relocate authority. Keying on an attribute gives authority over your accounts to whoever controls the attribute. Backing: Topology Is Not a Trust Model (`/blog/2026/06/19/topology-is-not-a-trust-model.html`), Why JWTs Make Terrible Authorization Tokens (`/blog/2025/10/10/jwts-are-for-authentication-not-authorization.html`), the identity-access-management guide (`/study-guides/security/identity-access-management.html`), the auth systems case study
+- **Experience:** Five auth systems unified (case study), if account linking across providers came up
+- **Reader's check this week:** Find where your sign-in callback looks up the local user. Is the key `(iss, sub)`, or is it email? Check whether account linking or just-in-time provisioning matches on email, and whether a multi-tenant app registration validates the tenant or issuer.
+- **Hook:** Your login trusts Microsoft. It also trusts whoever can edit an email field in any Microsoft tenant.
+- **Note:** The OIDC spec already says this, so the post can't stop at "use `sub`". Its contribution is showing that three separate disclosures are one mechanism, and that account linking and provisioning, not the login itself, are where apps fall back to email. If that framing turns out to be standard identity-practitioner material, it is a tired-subject candidate. Pairs with `reclaimable-names`.
+- **Could change if:** Major identity libraries (ASP.NET Core's OIDC handler, Auth0, Cognito) already key on `sub` by default and block email linking, so that the bug is limited to apps that override them.
 
-## 5. `error-handlers-cause-outages`: Your Catch Blocks Cause Your Outages
+## 6. `recovery-is-authentication`: Your Account Recovery Is Your Real Login
 
-- **Research question:** Where do catastrophic production failures actually start, and does error-handling code get testing in proportion to that?
+- **Research question:** How strong is an account's authentication once every path that issues a credential is counted, including recovery, support resets, and admin overrides?
 - **Origin:** R
 - **Scores:** U 5, D 3, S 5, E 4 = **17**
-- **Hypothesis:** Most catastrophic failures in distributed systems start with a non-fatal error handled wrongly: swallowed, logged and continued, or escalated too far. A large share of those handlers are trivially wrong (empty, a TODO, or the opposite of what the error needed), so simple tests of error paths would catch them. Teams test the happy path and ship the code that decides outages without ever running it.
+- **Hypothesis:** An account is only as strong as the weakest path that ends in a credential or session. Teams design login with MFA, then add recovery by email or SMS, a support desk that can reset factors, and admin impersonation, each with weaker proof and less logging. Attackers take those paths: help-desk resets in the MGM and Okta support incidents, and SMS recovery in SIM-swap takeovers. Google's own data showed security questions were weaker than passwords. NIST's 800-63B-4 (2025) now treats recovery as part of authentication assurance. Teams should inventory every credential-issuing path and hold each to the login's assurance level, or accept that the weakest path sets the real one.
 - **Evidence:**
-  - Yuan et al., "Simple Testing Can Prevent Most Critical Failures" (OSDI 2014): catastrophic failures traced to incorrect handling of non-fatal errors, many of them trivial
-  - Gunawi et al., "What Bugs Live in the Cloud?" (SoCC 2014)
-  - Gunawi et al., "Why Does the Cloud Stop Computing? Lessons from Hundreds of Service Outages" (SoCC 2016)
-  - The Aspirator checker from the OSDI paper, and .NET analyzers that flag empty catch blocks (CA1031 and related)
-- **Lens and backing:** Name the real thing. "Error handling" is the outage-decision code, and it's the least exercised. Backing: Why I Changed My Mind About Exceptions (`/blog/2025/10/29/result-pattern-vs-exceptions-revisited.html`), Making Invalid States Unrepresentable (`/blog/2025/12/18/making-invalid-states-unrepresentable-the-billion-dollar-mistake-that-wasnt.html`), the exceptions-and-errors guide (`/study-guides/dotnet/c-sharp/fundamentals/exceptions-and-errors.html`), the silent SDK deadlock case study
-- **Experience:** The silent SDK deadlock case study, if a swallowed or misrouted error played a part
-- **Reader's check this week:** Grep for `catch` blocks that only log, or are empty, in the code path of your last incident. Then count how many catch blocks in one service have a test that reaches them.
-- **Hook:** The code that decides whether you have an outage is the code you've never run.
-- **Note:** D is capped at 3: the OSDI paper is the main argument, and the SoCC studies plus the C# application lift it. Extends the exceptions post's committed position rather than reversing it.
-- **Could change if:** The later SoCC outage data shows error handling is a minor cause next to configuration and upgrades, or the OSDI finding doesn't hold outside the open-source data stores it studied.
+  - NIST SP 800-63B-4 (final, July 2025): new account recovery requirements by assurance level; static knowledge-based answers deprecated
+  - Bonneau, Bursztein, Caron, Jackson, Williamson, "Secrets, Lies, and Account Recovery" (WWW 2015)
+  - MGM Resorts (September 2023): attackers gained access through a help-desk call, per public reporting
+  - Okta, October 2023 support system incident report
+  - CISA and FBI advisories on Scattered Spider help-desk social engineering (2023)
+- **Lens and backing:** Name the real thing. The documented login isn't the authentication. The weakest credential-issuing path is. Backing: Auth Sessions Should Never Be Transient Across Boundaries (`/blog/2025/10/10/auth-sessions-should-never-cross-boundaries.html`), the identity-access-management guide, the incident-response-recovery guide
+- **Experience:** Digital banking at Alkami, if the author saw recovery or support-reset design there
+- **Reader's check this week:** List every path in your product that ends with a session, password reset, or new MFA factor: self-service recovery, support tooling, admin impersonation, SSO just-in-time provisioning, API key creation. Next to each, write the weakest proof it requires and whether it alerts the account owner.
+- **Hook:** You required MFA to log in. Your support desk can reset it over the phone.
+- **Note:** "Recovery is the weak link" is familiar in security circles, so the novelty test applies hard. The post must add the inventory method and the assurance-level framing from 800-63B-4, not retell incidents. Distinct from `identity-key-not-email`, which is about which identifier the login trusts, not which paths issue credentials.
+- **Could change if:** The evidence shows recovery paths are now commonly held to login assurance in the platforms most teams use (Entra, Okta, Cognito defaults), which would narrow the post to custom-built auth.
 
-## 6. `ownership-defects-truck-factor`: Code Ownership Lowers Defects and Raises Your Bus Factor
+## 7. `ops-tooling-authority`: Your Most Dangerous Code Is the Script Nobody Reviews
 
-- **Research question:** The research says concentrated ownership reduces defects and also that concentrated knowledge is a risk. Which should a team optimize, and can it measure both?
+- **Research question:** In public postmortems where operators deleted or removed production capacity by mistake, what did the tool allow, and what would have stopped it?
 - **Origin:** R
-- **Scores:** U 4, D 4, S 5, E 4 = **17**
-- **Hypothesis:** The two bodies of evidence measure different failures. Ownership studies count defects from many minor contributors, and truck-factor studies count knowledge loss when one person leaves. Both can be read from version control. A component with one dominant author and no secondary reviewer is a knowledge risk, and one with many minor authors and no owner is a defect risk. The target is a primary owner plus deliberate secondary contributors, and a team can measure where each component sits this week.
+- **Scores:** U 5, D 3, S 5, E 4 = **17**
+- **Hypothesis:** Operational tooling (cleanup scripts, capacity commands, data-fix jobs, console bulk actions) has more authority than product code. It runs with broad credentials, acts in bulk, and bypasses application validation, yet gets less review and fewer safeguards. The large self-inflicted outages share that profile. Atlassian's script accepted site IDs where app IDs were meant and permanently deleted about 400 customers' sites. An S3 playbook command removed more capacity than intended in 2017. GitLab's 2017 deletion ran against the wrong database. The fixes they adopted are product guarantees given to tooling: typed inputs, dry runs, scope limits, rate limits, and soft deletion with a recovery window.
 - **Evidence:**
-  - Bird et al., "Don't Touch My Code! Examining the Effects of Ownership on Software Quality" (FSE 2011)
-  - Greiler, Herzig, and Czerwonka, "Code Ownership and Software Quality: A Replication Study" (MSR 2015), which confirmed Bird et al. on four Microsoft products
-  - Thongtanunam et al., "Revisiting Code Ownership and Its Relationship with Software Quality in the Scope of Modern Code Review" (ICSE 2016)
-  - Avelino et al., "A Novel Approach for Estimating Truck Factors" (ICPC 2016)
-  - "Examining Ownership Models in Software Teams: A Systematic Literature Review and a Replication Study" (Empirical Software Engineering, 2024)
-- **Lens and backing:** Relocate authority. Ownership is authority placed on people, and both too much and too little of it fail. Backing: How Shared Libraries Become Shared Shackles (`/blog/2026/01/06/the-false-economy-of-shared-libraries.html`), the team-organization guide (`/study-guides/sdlc/team-organization.html`), dev-team-leadership-foundations
-- **Experience:** Tech lead and system architect roles, where the author decided who owned which components
-- **Reader's check this week:** Run `git shortlog` per top-level directory for the last year. For each component, note the top author's share and how many contributors are under 5%. Flag the components at either extreme.
-- **Hook:** Your best-owned module is your biggest bus-factor risk.
-- **Note:** Not Conway's Law (declined), which is about org shape and system shape. This is about authorship within a codebase. Name the replication studies honestly if they weaken the original effect.
-- **Could change if:** The 2024 review finds the ownership-defect link doesn't hold under modern code review, or the two metrics turn out not to trade off in practice.
+  - Atlassian, "Post-Incident Review on the April 2022 outage": the script took both site and app IDs, and both mark-for-deletion and permanent-delete modes
+  - AWS, "Summary of the Amazon S3 Service Disruption in the Northern Virginia (US-EAST-1) Region" (February 2017): the tool was changed to remove capacity more slowly and refuse to go below minimums
+  - GitLab, "Postmortem of database outage of January 31" (2017)
+  - Google SRE Book, discussion of automation safety and blast radius
+- **Lens and backing:** Relocate authority. The most authority sits in the least-engineered code, so the fix moves product guarantees to where the authority is. Backing: Why the Fastest Incident Responders Slow Down First (`/blog/2025/11/08/troubleshooting-production.html`), the incident-response-recovery guide (`/study-guides/security/incident-response-recovery.html`), the devops guide
+- **Reader's check this week:** List every script, job, or console action in your team that can delete data or remove capacity in bulk. For each one, check whether it has a dry run, rejects ambiguous identifiers, caps how much it touches per run, and leaves a recovery window.
+- **Hook:** Your product has validation, tests, and code review. The script that can delete every customer has none.
+- **Note:** Public incident analysis growth edge. The incidents are individually famous, so the post stands on the cross-incident pattern and a concrete guardrail checklist, not on retelling. Distinct from declined `ci-most-privileged-principal` (supply-chain hardening of CI) and `content-is-code` (global config pushes): this is about human-run operational tooling.
+- **Could change if:** The postmortems show the failures came from process (missing review, fatigue) rather than tool design, so that guardrails in the tool wouldn't have stopped them.
