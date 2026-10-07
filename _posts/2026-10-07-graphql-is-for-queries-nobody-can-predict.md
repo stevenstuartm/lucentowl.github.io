@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Persisted Queries Are the Tell That You Didn't Need GraphQL"
+title: "GraphQL Is for Queries Nobody Can Predict"
 date: 2026-10-07
 description: "GraphQL exists for graph data queried in ways nobody can predict, which rules out most of the teams running it. Persisted queries are the tell. A team that registers every query has predicted them all, and REST, gRPC, or a backend-for-frontend serves known queries without a hash registry."
 tags: [architecture, api-design, graphql, microservices, domain-boundaries]

@@ -20,8 +20,8 @@
 - id: graphql-persisted-queries
   change: new
   type: post
-  title: "Persisted Queries Are the Tell That You Didn't Need GraphQL"
-  url: /blog/2026/10/07/persisted-queries-are-the-tell-that-you-didnt-need-graphql.html
+  title: "GraphQL Is for Queries Nobody Can Predict"
+  url: /blog/2026/10/07/graphql-is-for-queries-nobody-can-predict.html
   note: "GraphQL earns its cost on graph data queried in ways nobody can predict; a team that registers every query has predicted them all, and simpler APIs serve known queries."
 
 - id: entitlement-not-feature-flag
