@@ -17,6 +17,13 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: graphql-persisted-queries
+  change: new
+  type: post
+  title: "Persisted Queries Are the Tell That You Didn't Need GraphQL"
+  url: /blog/2026/10/07/persisted-queries-are-the-tell-that-you-didnt-need-graphql.html
+  note: "GraphQL earns its cost on graph data queried in ways nobody can predict; a team that registers every query has predicted them all, and simpler APIs serve known queries."
+
 - id: entitlement-not-feature-flag
   change: new
   type: post

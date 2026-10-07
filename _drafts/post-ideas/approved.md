@@ -10,6 +10,5 @@ Ideas the author approved, waiting for a draft, oldest approval first. When a dr
 
 | ID | Working title | Approved | Draft |
 | --- | --- | --- | --- |
-| `graphql-persisted-queries` | Persisted Queries Are the Tell That You Didn't Need GraphQL | 2026-09-29 | `_drafts/graphql-persisted-queries.md` |
 | `retry-load-amplifier` | Your Retry Policy Is a Load Amplifier | 2026-09-29 | `_drafts/retry-load-amplifier.md` |
 | `windows-ui-framework-lessons` | Why WPF Outlived Every Windows UI Framework Offered in Its Place | 2026-09-30 | `_drafts/windows-ui-framework-lessons.md` |
