@@ -8,6 +8,10 @@ author: steven-stuart
 sources:
   - title: "GraphQL: A data query language (Engineering at Meta, 2015)"
     url: "https://engineering.fb.com/2015/09/14/core-infra/graphql-a-data-query-language/"
+  - title: "GraphQL.org: Security"
+    url: "https://graphql.org/learn/security/"
+  - title: "Apollo GraphOS: Safelisting with Persisted Queries"
+    url: "https://www.apollographql.com/docs/graphos/platform/security/persisted-queries"
   - title: "GitHub Docs: Rate limits and query limits for the GraphQL API"
     url: "https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api"
   - title: "Neo4j GraphQL Library documentation"
@@ -24,8 +28,6 @@ sources:
     url: "https://www.apollographql.com/docs/graphos/routing/performance/caching/entity"
   - title: "PortSwigger Web Security Academy: Bypassing GraphQL brute force protections"
     url: "https://portswigger.net/web-security/graphql/lab-graphql-brute-force-protection-bypass"
-  - title: "GraphQL.org: Security"
-    url: "https://graphql.org/learn/security/"
   - title: "IBM GraphQL Cost Directives Specification"
     url: "https://ibm.github.io/graphql-specs/cost-spec.html"
   - title: "What's new for Hot Chocolate 14 (ChilliCream, 2024)"
@@ -38,8 +40,6 @@ sources:
     url: "https://relay.dev/docs/guides/persisted-queries/"
   - title: "Hot Chocolate v15: Persisted Operations"
     url: "https://chillicream.com/docs/hotchocolate/v15/performance/persisted-operations/"
-  - title: "Apollo GraphOS: Safelisting with Persisted Queries"
-    url: "https://www.apollographql.com/docs/graphos/platform/security/persisted-queries"
   - title: "Pact: Consumer-driven contract testing"
     url: "https://docs.pact.io/"
   - title: "Relay: Thinking in Relay"
@@ -52,9 +52,9 @@ sources:
     url: "https://engineering.fb.com/2022/11/15/open-source/sapling-source-control-scalable/"
 ---
 
-When Facebook introduced GraphQL publicly in 2015, its engineering post explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The team needed an API "powerful enough to describe all of Facebook." The line most people quote from that post, that "the shape of the returned data is determined entirely by the client's query," is true, but it's a consequence of the graph. It isn't the reason GraphQL exists.
+When Facebook introduced GraphQL publicly in 2015, its engineering post explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The team needed an API "powerful enough to describe all of Facebook." The line most people quote from that post, that "the shape of the returned data is determined entirely by the client's query," is true, but it's a consequence of the graph. It isn't the reason GraphQL exists. Nobody can list every path through a graph that size in advance, so the client has to write the query.
 
-Most teams adopt GraphQL for other reasons: one endpoint, fewer round trips, frontend teams that don't have to wait on backend changes. Persisted queries show where that leads. They lock an endpoint down to operations registered ahead of time, and the ecosystem increasingly recommends them for any first-party API. But once the server runs only operations it already holds, the client no longer shapes anything at runtime. GraphQL is built for queries nobody can predict, and a persisted query registry is a list of every query the team predicted. Either the client is in control of the query or it isn't, and a team that locks the query down has answered the question of whether it needed GraphQL.
+Most teams adopt GraphQL for other reasons: one endpoint, fewer round trips, frontend teams that don't have to wait on backend changes. None of those requires queries nobody can predict, and persisted queries show it. They lock an endpoint down to operations registered ahead of time, and the GraphQL Foundation and vendors like Apollo recommend them for any API whose only clients are the team's own apps. A persisted query registry is a list of every query the team predicted. A team that can write that list doesn't need the client in control of the query, and it has answered the question of whether it needed GraphQL.
 
 ## GraphQL Exists for Graphs Nobody Can Predict
 
@@ -72,13 +72,13 @@ In my view, few products have data like that. Most applications have collections
 
 GraphQL earns its place when the server can't know in advance what callers will ask of the graph. GitHub's GraphQL API is the clearest case. Repositories, issues, pull requests, users, and organizations form a graph that callers traverse in ways GitHub can't predict, and that unpredictability, not the fact that the API is public, is what justifies GraphQL. AI agents and other open-ended clients pass the same test, because they compose queries as they go and nobody can list them ahead of time. When the data already lives in a graph database and the queries are open-ended, GraphQL is a thin layer over a model that's a graph to begin with, but a known query against that database can still sit behind an ordinary endpoint. The Neo4j GraphQL Library generates a schema from type definitions and turns each operation into "a single Cypher query which is executed against the database."
 
-Even agents get pinned down. Apollo's MCP server can give an agent predefined operations or an open `execute` tool that Apollo warns "isn't pinned to a previously reviewed document." Its guidance is to govern what agents can reach "by adopting predefined persisted queries." But an agent is the clearest case of a caller whose queries nobody can predict, and predefining them gives up the reason to expose a graph at all. An MCP server built on predefined operations could wrap REST or gRPC endpoints just as well.
+Even agents get pinned down. Apollo's MCP server can give an agent predefined operations or an open `execute` tool that Apollo warns "isn't pinned to a previously reviewed document." Its guidance is to govern what agents can reach "by adopting predefined persisted queries." But predefining an agent's queries gives up the reason to expose a graph to it at all. An MCP server built on predefined operations could wrap REST or gRPC endpoints just as well.
 
-Everywhere else, the queries are predictable, and a team that can predict its queries can define them on the server. A team that adopts them has written down every query its clients will send, which is the work GraphQL was built to make unnecessary. Applied honestly, the test rules out most of the teams running GraphQL today. Outside it, GraphQL adds a query language, a schema, a resolver layer, and a security problem to an application that didn't need any of them.
+Everywhere else, the queries are predictable, and a team that can predict its queries can define them on the server. A team that adopts persisted queries has written down every query its clients will send, which is the work GraphQL was built to make unnecessary. Applied honestly, the test rules out most of the teams running GraphQL today. Outside it, GraphQL adds a query language, a schema, a resolver layer, and a security problem to an application that didn't need any of them.
 
 ## One Endpoint Over Many Services Fights the Teams Behind It
 
-The most common reason teams adopt GraphQL without a graph is to put one endpoint in front of several services. Apollo Federation and HotChocolate's Fusion both work this way. Each service publishes a subgraph, a gateway composes them into one schema, and the gateway splits each incoming query into requests to the services that own the fields.
+The most common reason teams adopt GraphQL without a graph is to put one endpoint in front of several services. Apollo Federation and Hot Chocolate's Fusion both work this way. Each service publishes a subgraph, a gateway composes them into one schema, and the gateway splits each incoming query into requests to the services that own the fields.
 
 ### The Facade Recreates Cross-Service Orchestration
 
@@ -127,13 +127,13 @@ One product doesn't prove a rule, so here are the conditions that sank ours. The
 
 Security is the usual case for persisted queries, and the concern is fair. When callers write their own queries, every caller does, not just the frontend team, because the endpoint shows in the browser's network tab and the schema is often one introspection query away. A query like `users(first: 100) { friends(first: 100) { friends(first: 100) { name } } }` asks for a million records. Aliases let one request call a login mutation a hundred times, which a per-request rate limiter counts as one attempt, and PortSwigger's Web Security Academy teaches that bypass as a lab exercise.
 
-None of this needs a registry. The GraphQL Foundation's security guidance recommends limiting query depth, applying "a separate smaller limit to how deeply lists can be nested," capping operations per batch, and restricting aliases. Cost analysis goes further, weighting each field and rejecting any query over a budget. IBM drafted a GraphQL Cost Directives Specification in 2021 so that "servers can express what is costly for them in a standard way," and HotChocolate 14 turned cost analysis on by default. Public APIs over real graphs run this way at scale. GitHub's GraphQL API requires a `first` or `last` argument between 1 and 100 on every connection, caps a call at 500,000 nodes, and meters each user at 5,000 points an hour, and Shopify's Admin API rate-limits by calculated query cost. Neither knows its callers' queries in advance.
+None of this needs a registry. The GraphQL Foundation's security guidance recommends limiting query depth, applying "a separate smaller limit to how deeply lists can be nested," capping operations per batch, and restricting aliases. Cost analysis goes further, weighting each field and rejecting any query over a budget. IBM drafted a GraphQL Cost Directives Specification in 2021 so that "servers can express what is costly for them in a standard way," and Hot Chocolate 14 turned cost analysis on by default. Public APIs over real graphs run this way at scale. GitHub's GraphQL API requires a `first` or `last` argument between 1 and 100 on every connection, caps a call at 500,000 nodes, and meters each user at 5,000 points an hour, and Shopify's Admin API rate-limits by calculated query cost. Neither knows its callers' queries in advance.
 
-A cost budget is an estimate, and the GraphQL Foundation recommends trusted documents for first-party APIs because an allowlist is exact. If a team can't accept open queries even behind limits and cost analysis, though, the problem is the choice of GraphQL, not the absence of a registry.
+A cost budget is an estimate and an allowlist is exact, and the GraphQL Foundation recommends trusted documents for first-party APIs. If a team can't accept open queries even behind limits and cost analysis, though, the problem is the choice of GraphQL, not the absence of a registry.
 
 ## Persisted Queries Carry the Costs of Both Models
 
-With persisted queries, the client's operations are extracted at build time, hashed, and registered with the server, and in production the client sends only the hash. Relay's compiler converts each operation's text "to md5 hashes," and HotChocolate's `OnlyAllowPersistedDocuments` option, Apollo's safelisting, and the GraphQL Foundation's "trusted documents" describe the same arrangement. The result carries the coordination of both a client-defined and a server-defined API, with the clear ownership of neither.
+With persisted queries, the client's operations are extracted at build time, hashed, and registered with the server, and in production the client sends only the hash. Relay's compiler converts each operation's text "to md5 hashes," and Hot Chocolate's `OnlyAllowPersistedDocuments` option, Apollo's safelisting, and the GraphQL Foundation's "trusted documents" describe the same arrangement. The result carries the coordination of both a client-defined and a server-defined API, with the clear ownership of neither.
 
 ### Nobody Owns the Operation
 
