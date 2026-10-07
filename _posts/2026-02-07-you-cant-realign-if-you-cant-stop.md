@@ -1,8 +1,8 @@
 ---
 layout: post
-title: "Plan Continuation Bias: Why We Keep Building the Wrong Thing"
+title: "Planning for Plan Continuation Bias: How to Keep Building the Right Thing"
 date: 2026-02-07
-description: "Most software projects go wrong by drifting out of alignment with the need, the tradeoffs, and the risk. Realigning requires stopping, and plan continuation bias is the impulse that keeps planning, discovery, coding, and testing from stopping."
+description: "Most software projects go wrong by drifting out of alignment with the need, the tradeoffs, and the risk. Realigning requires stopping, and since plan continuation bias keeps planning, discovery, coding, and testing from stopping, the fix is to build stops into the work instead of waiting to notice."
 tags: [plan-continuation-bias, alignment, decision-making, cognitive-bias, software-development]
 author: steven-stuart
 sources:
@@ -34,7 +34,7 @@ Pilots call it get-there-itis. Researchers call it plan continuation bias. Judit
 
 Orasanu's team locates the cause in effort rather than stubbornness. Revising your understanding of a situation and working out a new course of action costs more cognitive work than continuing with a plan whose details are already settled, and people are more often than not cognitive misers who take the cheap operation when it's available. Workload, time pressure, and ambiguous signals all shrink the budget for the expensive operation at exactly the moment it's needed. It is not that the original plan wins the argument; it wins by default by never having to have an argument.
 
-The stakes don't transfer to software, but the mechanism does. A pilot pressing into weather has minutes and no undo, and the one who continues and survives gets a fright that recalibrates them. A developer pressing on with the wrong approach has weeks and a git history, and the one who continues gets a merged pull request. That asymmetry is why the software version teaches you less.
+The stakes don't transfer to software, but the mechanism does. A pilot pressing into weather has minutes and no undo, and the one who continues and survives gets a fright that recalibrates them. A developer pressing on with the wrong approach gets no such warning. The mistake plays out over weeks, git can undo any of it, and the work ends the way good work does, reviewed and merged. The pilot who got away with it at least knows it was close. The developer never learns there was anything to get away with, so the software version of the bias rarely corrects itself.
 
 Our own advice makes it worse. "Finish what you started" is plan continuation bias repackaged as a character virtue. It assumes that what you started should be finished, which is exactly the question the bias keeps you from asking. "Think before you act" assumes the thinking was sound, and once you've thought and decided, the decision has inertia. The problem was never acting without thinking. It's acting without *reconsidering*.
 
@@ -122,10 +122,8 @@ Four countermeasures work against the impulse:
 The pause only helps if something happens inside it. The stop test is three questions that fit in the gap:
 
 - **Am I proving or testing?** Proving asks whether this can be made to work. Testing asks whether it should be.
-- **What would I throw away if I switched right now, and was that number smaller an hour ago?** If it's growing, the window is closing, and any growth since the doubt first surfaced is something the impulse produced rather than something the problem required.
+- **Is switching getting more expensive while I keep going?** Compare what you would throw away by switching now with what you would have thrown away an hour ago. If that pile keeps growing while the doubt sits unresolved, you are building the sunk cost that will later argue against switching, and the cheap moment to change course is slipping away.
 - **If I hadn't already started, would I choose this approach today?** This is Peter Drucker's question from The Effective Executive, "If we did not already do this, would we go into it now?", scaled down from a program to a single task. A no here is the entire signal. Everything after it is negotiation with sunk cost.
-
-There is an opposite pathology, and these countermeasures feed it. A developer who asks "would I choose this today?" every twenty-five minutes and answers honestly will restart more often than they finish, because most mid-implementation second thoughts are not better ideas. They're the appeal of an approach you haven't yet discovered the problems with, competing against an approach whose problems you can already see. The stop test is a check on a bias that runs one direction by default, not a standing invitation to relitigate. If your history shows more abandoned branches than shipped ones, plan continuation bias is not your problem and this is the wrong medicine.
 
 ## Alignment Depends on the Ability to Stop
 
