@@ -2,29 +2,45 @@
 layout: post
 title: "Why I Changed My Mind About Exceptions"
 date: 2025-10-29
-description: "Evaluating arguments for Result types versus exceptions for handling expected failures in modern distributed C# systems, examining which claims have measurable backing and which are subjective preference."
+description: "Weighing the arguments for Result types and for exceptions when handling expected failures in distributed C# systems, and why the structural ones make Results the better default for domain operations."
 tags: [error-handling, patterns, security, performance]
 author: steven-stuart
 sources:
-  - title: "LanguageExt on GitHub"
-    url: "https://github.com/louthy/language-ext"
+  - title: "Refit documentation: Errors"
+    url: "https://www.reactiveui.net/documentation/refit/results/errors/"
+  - title: "Rust standard library: std::result and #[must_use]"
+    url: "https://doc.rust-lang.org/std/result/"
+  - title: "Explore new features available in C# 15 preview (.NET Blog)"
+    url: "https://devblogs.microsoft.com/dotnet/explore-csharp-15/"
+  - title: "Framework Design Guidelines: Exceptions and Performance (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/exceptions-and-performance"
   - title: "FluentResults on GitHub"
     url: "https://github.com/altmann/FluentResults"
   - title: "ErrorOr on GitHub"
     url: "https://github.com/amantinband/error-or"
+  - title: "Newtonsoft.Json on NuGet"
+    url: "https://www.nuget.org/packages/Newtonsoft.Json"
+  - title: "LanguageExt on GitHub"
+    url: "https://github.com/louthy/language-ext"
+  - title: "Handle errors in ASP.NET Core (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling"
+  - title: "Best practices for exceptions (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions"
+  - title: "Task.WhenAll Method (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task.whenall"
+  - title: "CA1806: Do not ignore method results (Microsoft Learn)"
+    url: "https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca1806"
 ---
 
-I prefer the clean code that is more often produced by throwing exceptions. With the happy path uncluttered by error handling, the implicit propagation of errors to appropriate orchestration layers, and the clean separation of concerns. It's aesthetically cleaner and moves the complexity of error handling to a one or just a few decision points.
+I prefer the clean code that is more often produced by throwing exceptions. With the happy path uncluttered by error handling, the implicit propagation of errors to appropriate orchestration layers, and the clean separation of concerns. It's aesthetically cleaner and moves the complexity of error handling to one or just a few decision points.
 
 But when Rust's approach to error handling gained cultural influence and C# developers (among many others of course) began exploring Result types through community libraries, I re-examined my perspective more honestly. Do the arguments for Results hold up under scrutiny for expected failures in modern systems?
 
-This isn't just blind advocacy. It's an honest conceptual analysis of the arguments from both camps, examining which ones have measurable backing and which are subjective preference.
+This isn't just blind advocacy. It's an honest conceptual analysis of the arguments from both camps, examining which ones hold up and which are subjective preference.
 
 Before I dive into this, let's be clear about what we are not talking about. We are not talking about programming errors like null references, array index violations, or machine resource errors. Those are bugs and special occurrences which should cause a fatal response since there is no safe way to default the outcome.
 
 ## Choosing Between Results and Exceptions
-
-Let's start with the general premise which sets up the comparison.
 
 When validating a payment request that might fail for multiple reasons (insufficient funds, expired card, fraud detection, network timeout), should your code:
 
@@ -54,81 +70,69 @@ public Result<PaymentConfirmation> ProcessPayment(PaymentRequest request)
 }
 ```
 
-This applies to all operations where failure is expected and valid: validation, business rules, external service calls, data persistence, network operations.
+In the first option we allow the handling of the decision to be made by an even higher layer or we simply let the failure propagate and use middleware to convert the failure to what we assume is a safe response and often an HTTP status code.
 
-In the first option we allow the handling of the decision to be made by an even higher layer or we simply return the failure and use middleware to convert the failure to what we assume is a safe response and often an HTTP status code.
+In the second option, which can vary greatly depending on the language or library being used, we can choose or are forced to handle each possible outcome. Often we need to handle a success, a failure, or a partial failure. This makes the expected outcomes visible at every layer. It also removes most of the cases where an exception is thrown deep in a workflow only to be caught and translated at the top, paying the cost of a throw for an outcome everyone expected.
 
-In the second option, which can vary greatly depending on the language or library being used, we can choose or are forced to handle each possible outcome. Often we need to handle a success, a failure, or a partial failure. This makes it obvious at all layers and for all functions what the result can be and how we handle the outcomes. This also eliminates nearly all use cases where an exception message is propagated and where the exception throw overhead was even required from the start of the workflow to the end.
-
-## Why This Matters Now More Than Ever
-
-The Result vs Exception debate has existed for decades. So why does it matter more now?
+## Why Expected Failures Matter More Now
 
 <blockquote class="pull-quote">
 <p>In modern distributed systems, expected failures happen constantly at scale: circuit breaker fallbacks, timeout retries, validation of user input, partial batch results.</p>
 </blockquote>
 
-**Distributed systems made expected failures more frequent**. In monolithic applications, exceptions for validation or not-found scenarios were tolerable. Treating these frequent outcomes as exceptions creates friction.
+**Distributed systems made expected failures more frequent**. A monolith already calls databases and third-party APIs that time out, but most of its calls stay in-process and can't. Decomposing it turns more of those in-process calls into network hops, and each hop adds timeouts and transient faults. Business answers that used to be method calls, such as an out-of-stock or credit check, now arrive as a peer's 404, 409, or decline, and treating those frequent outcomes as exceptions creates friction.
 
-Exceptions serialize across service boundaries as HTTP errors, generate stack traces for telemetry systems, and require try-catch blocks at every service call. Results are just data. They compose, serialize cleanly, and don't trigger observability overhead.
+Both mechanisms serialize a failure into a status and body at a service boundary. The difference is on the calling side, where common clients default to throwing. Refit throws an `ApiException` for every non-success status on a method returning `Task<T>`, so an expected 404 or 409 becomes an exception the caller must catch and inspect. Its `ApiResponse<T>` wrapper records the error instead, a Result in all but name.
 
-**Offline-first architecture became standard**. Progressive web apps, mobile applications, and desktop clients operate in environments where "no network" isn't exceptional; it's expected.
+**Offline-first architecture became common**. For progressive web apps and mobile and desktop clients, "no network" and sync conflicts are normal operating conditions.
 
-Sync conflicts, partial data availability, and intermittent connectivity are normal operating conditions. Error handling mechanisms must be designed for frequent expected states.
+**Functional architecture became common**. Even OOP codebases now use stateless services, immutable data pipelines, and event-driven patterns. These designs reward treating a failure as data, and a message handler shows the mechanism. When it throws on a business rejection, the broker treats the message as failed, redelivers it, and after enough retries dead-letters a message that was never broken. A catch at the top of the handler can fix that, but only if it can tell a rejection from a transient fault, which is what a Result's type already says. A handler that returns a Result can acknowledge the message and publish the rejection as an event.
 
-**Observability systems make exception costs visible**. Every exception generates a stack trace that gets captured, stored, and transmitted through distributed tracing. At scale, exception-heavy architectures create measurable storage costs and noise in observability platforms. Results avoid this entirely.
+## Rust Enforces the Split, C# Leaves It to Discipline
 
-**Functional architecture became standard**. Even OOP codebases now use stateless services, immutable data pipelines, and event-driven patterns. These are functional problems, and Results fit functional architectures better than exceptions, which were designed for imperative control flow.
+**Rust** emerged with strong functional influences. It enforces a clear split: expected failures return `Result<T, E>` types, while unexpected failures trigger panics that unwind the stack like exceptions.
 
-### The Language Comparison
+**C#** started heavily OOP-dominant and progressively adopted functional features (LINQ, pattern matching, immutability). It historically used exceptions for all failures, both expected and unexpected.
 
-Both Rust and C# are pragmatic, multi-paradigm languages that evolved from different starting points.
+Rust's standard library marks `Result` as `#[must_use]`, so ignoring one draws a compiler warning by default (a team can deny that lint to make it an error).
 
-**Rust** emerged with strong functional influences and a systems programming focus. It enforces a clear split: expected failures return `Result<T, E>` types (compiler-enforced handling), while unexpected failures trigger panics that unwind the stack like exceptions.
+In C#, this is now possible through pattern matching (C# 7+) and community Result libraries, but relies on discipline rather than compiler enforcement. C# 15, shipping with .NET 11 in November 2026, adds union types whose `switch` expressions the compiler checks for exhaustiveness. A union of specific error cases gets checked handling once the caller matches on it.
 
-**C#** started heavily OOP-dominant and progressively adopted functional features (LINQ, pattern matching, immutability) to solve practical problems. It historically used exceptions for all failures, both expected and unexpected.
+Microsoft hasn't shipped a general Result type. Its Framework Design Guidelines stay exception-first and say not to use error codes over performance concerns. But they also call slow exceptions in code that routinely fails "a valid concern," note that a throwing member "can be orders of magnitude slower," and recommend the Try-Parse pattern (`int.TryParse` returning `false`), paired with a throwing version, for members that fail in common scenarios. Microsoft presents that as a pattern within the exception model, applied member by member, not a different default.
 
-Both ecosystems now support the same error handling split: Results for expected failures, exceptions or panics for programming errors.
-
-In Rust, this is built-in and enforced. `Result<T, E>` types must be handled (compiler error if ignored), while panics are reserved for bugs.
-
-In C#, this is now possible through pattern matching (C# 7+) and community Result libraries, but relies on discipline rather than compiler enforcement. Nothing stops you from ignoring a returned Result or using exceptions for expected failures.
-
-Microsoft hasn't adopted Results officially. The Result pattern adoption is **community-driven** through library authors choosing this despite Microsoft's silence. Community libraries exist (LanguageExt with 26M downloads, FluentResults with 3.3M downloads, and ErrorOr), but these aren't mainstream. Popular .NET libraries have hundreds of millions of downloads.
-
-Still, when a pragmatic developer community independently moves toward patterns from another ecosystem, that pattern means something.
+The general Result pattern is **community-driven**. FluentResults and ErrorOr have about 37 and 12 million NuGet downloads (October 2026), small next to Newtonsoft.Json's 9 billion, and LanguageExt's 49 million cover a whole functional library, not just Results. Still, several independent libraries building the same pattern shows a need, in some codebases, that the base library leaves unmet.
 
 ## Arguments for Result Types
 
 ### Performance for frequent expected failures
 
-When cache misses, validation failures, and timeouts happen thousands of times per second, exception overhead creates degradation. Results are simple branches while exceptions require stack unwinding. Calling these failures "exceptional" doesn't change the performance characteristics.
+When validation failures happen thousands of times per second on a CPU-bound hot path, throwing costs more than branching, because an exception captures a stack trace and unwinds the stack. Calling these failures "exceptional" doesn't change that. Inside a request that waits on a database or a timeout, the cost is noise, so this is the narrowest of the four arguments.
 
-**Strength**: Measurable at scale in systems with high-frequency expected failures.
+**Strength**: A gain on CPU-bound hot paths, not a reason on its own.
 
 ### Information disclosure prevention by default
 
-Stack traces leak automatically unless actively prevented at every boundary. Results can't leak stack traces because there are no stack traces. Safe boundaries are the default, not something you must remember to enforce.
+An exception carries its stack trace and message everywhere it goes. ASP.NET Core's production default returns a bare 500, so leaks come from handlers teams write themselves, such as an error response that includes `ex.Message` or `ex.ToString()`. Microsoft's best practices for exceptions tell you to rethrow the original or wrap it as the inner exception, so a domain exception built by the book carries the provider exception from a database driver or library you don't control, whose message can include constraint names, SQL fragments, or file paths. An adapter could throw a fresh exception with no inner one, but that goes against the guidance. When an adapter translates the provider exception into an error type that can't hold one, such as ErrorOr's code and description or a C# 15 union of domain cases, the error carries only the fields your domain code put in it. FluentResults' `CausedBy` can attach the exception, which reopens the same path. Unanticipated provider exceptions still depend on the boundary handler in either design.
 
-**Strength**: Security by default beats security through discipline.
+**Strength**: With an error type that can't carry exceptions, modeled failures are safe by construction.
 
 ### Type signatures as reliable documentation
 
 `Result<Order>` tells you immediately that getting an order can fail. `Order` tells you nothing without reading implementation or relying on potentially outdated XML comments. Refactoring tools update type signatures automatically; they don't update documentation.
 
-**Strength**: Types can't lie about whether failure is possible.
+**Strength**: Fallibility in the signature can't silently go stale the way a comment can.
 
 ### Natural composition for partial success and iteration
 
-Batch operations, parallel workflows, and offline sync scenarios often have partial success. Results compose naturally through filtering and mapping. In offline-first applications syncing local changes to servers, some records succeed while others fail due to conflicts or validation. This is expected behavior, not an exceptional case.
+Batch operations, parallel workflows, and offline sync scenarios often have partial success. Results compose naturally through filtering and mapping.
 
-More critically: **exceptions force iteration at the wrong layer**. When processing a collection where some items might fail, you must iterate at the orchestration layer (where you can catch exceptions) even if iteration logically belongs in the service layer.
+More critically: **exceptions pull iteration toward wherever they are caught**. When some items in a collection might fail, iteration tends to land in the orchestration layer where the catch is, even if it logically belongs in the service layer.
 
 ```csharp
-// Exception approach - iteration forced into controller
+// Exception approach - iteration pushed into the controller
 public async Task ProcessOrders(List<string> orderIds)
 {
-    foreach (var id in orderIds) // Must iterate here
+    foreach (var id in orderIds) // Iterate where you can catch
     {
         try { await _orderService.Process(id); }
         catch (Exception ex) { /* handle */ }
@@ -136,14 +140,14 @@ public async Task ProcessOrders(List<string> orderIds)
 }
 
 // Result approach - iteration lives in service layer
-public async Task<List<Result<Order>>> ProcessAll(List<string> orderIds)
+public async Task<Result<Order>[]> ProcessAll(List<string> orderIds)
 {
     var tasks = orderIds.Select(id => Process(id));
-    return await Task.WhenAll(tasks); // Parallel, natural
+    return await Task.WhenAll(tasks); // Parallel, every outcome kept
 }
 ```
 
-With parallel processing, `Task.WhenAll` with exceptions is awkward because one exception fails the entire batch. `Task.WhenAll` with Results naturally preserves all outcomes.
+The service layer could iterate with exceptions too, but only by catching each item's exception and converting it into a per-item success or failure, which is a Result by another name. Parallelism adds a second cost. `Task.WhenAll` waits for every task, but if any of them faults, the combined task faults with all the exceptions aggregated, `await` rethrows only the first, and no array of results comes back. `Task.WhenAll` over Results returns every outcome as an ordinary array. Unmodeled faults still need one catch at the item boundary, so what Results remove is inventing a per-item outcome type and unwrapping the aggregate, not the try-catch itself.
 
 **Strength**: Results allow iteration and parallelism at appropriate abstraction levels.
 
@@ -151,7 +155,7 @@ With parallel processing, `Task.WhenAll` with exceptions is awkward because one 
 
 ### Implicit propagation to appropriate handlers
 
-Exceptions bubble to orchestration layers without code at each level. Throw once, catch at the boundary. The happy path stays clean; error handling lives at boundaries.
+Exceptions bubble to orchestration layers without code at each level. The happy path stays clean; error handling lives at boundaries.
 
 Results require explicit propagation. Return `Result<T>`, check it, propagate it. This threads error handling through intermediate functions that don't care about the specific error.
 
@@ -165,7 +169,7 @@ The .NET ecosystem uses exceptions. Entity Framework throws `DbUpdateException`.
 
 ### C# doesn't enforce Result handling
 
-Unlike Rust where ignoring a `Result` is a compiler error, C# lets you completely ignore returned Results. You can access `.Value` without checking `.IsSuccess` and get runtime exceptions anyway.
+Unlike Rust, where ignoring a `Result` draws a compiler warning, C# lets you completely ignore returned Results. You can access `.Value` without checking `.IsSuccess` and get runtime exceptions anyway.
 
 ```csharp
 public Result<Order> GetOrder(string id) { /* ... */ }
@@ -173,13 +177,13 @@ public Result<Order> GetOrder(string id) { /* ... */ }
 GetOrder("123"); // Completely ignored, no compiler error
 ```
 
-The "compiler safety" argument assumes static analyzers and discipline, the same discipline proper exception handling requires.
+The "compiler safety" argument assumes static analyzers and discipline, the same discipline proper exception handling requires. The way each one fails differs too. A forgotten exception propagates and fails the request loudly, while a forgotten Result with no value, such as a failed save, lets execution continue as if it succeeded.
 
 **Strength**: Results in C# provide discoverability, not enforcement.
 
 ### Orchestration layers solve the same problems
 
-Proper architecture already requires orchestration layers that catch domain exceptions, translate them to appropriate responses, and control what information crosses boundaries. These layers also make consistent logging decisions. Results don't eliminate the need for this architecture; they just change what propagates upward.
+Proper architecture already requires orchestration layers that catch domain exceptions, translate them to appropriate responses, and control what information crosses boundaries. Results don't eliminate the need for this architecture; they just change what propagates upward.
 
 **Strength**: Architecture matters more than mechanism.
 
@@ -198,7 +202,7 @@ Well-maintained codebases keep documentation current through code reviews. If yo
 
 ### Results encourage scattered error handling
 
-Making it syntactically easy to handle errors inline encourages developers to scatter error-handling logic across call sites instead of centralizing it in orchestration layers. The path of least resistance becomes handling each Result immediately rather than propagating it to appropriate boundaries.
+Making it syntactically easy to handle errors inline encourages developers to scatter error-handling logic across call sites instead of centralizing it in orchestration layers.
 
 **Strength**: Results can create worse maintainability if misused.
 
@@ -208,15 +212,10 @@ Making it syntactically easy to handle errors inline encourages developers to sc
 <div class="content-card content-card--accent">
 <h4>Result Arguments That Stand</h4>
 <ul>
-<li>Performance impact is measurable and matters at scale</li>
-<li>Information leakage is default behavior with exceptions, requires prevention with Results</li>
-<li>Type signatures are more reliable than documentation for indicating failure</li>
+<li>Throwing costs more than branching, which matters on CPU-bound hot paths</li>
+<li>A modeled failure's error carries no stack trace or provider message</li>
+<li>Type signatures show that an operation can fail more reliably than documentation</li>
 <li>Iteration and parallelism can live at appropriate abstraction levels</li>
-</ul>
-<p><strong>Arguments that weaken:</strong></p>
-<ul>
-<li>Good architecture required either way (orchestration layers needed for both approaches)</li>
-<li>Scattered error handling risk remains (centralizing error logic is a discipline issue for both)</li>
 </ul>
 </div>
 <div class="content-card content-card--accent-warning">
@@ -225,33 +224,50 @@ Making it syntactically easy to handle errors inline encourages developers to sc
 <li>Implicit propagation reduces boilerplate in intermediate layers</li>
 <li>Framework integration is smoother without constant translation</li>
 <li>Orchestration layers remain valuable for consolidating error handling decisions</li>
+<li>Enforcing Result handling in C# is opt-in and configured per method</li>
 </ul>
-<p><strong>Arguments that weaken:</strong></p>
+<p><strong>Exception arguments that weaken:</strong></p>
 <ul>
-<li>Documentation requires discipline to maintain (documentation rots in practice)</li>
-<li>Clean happy-path code hides what can fail (failures become invisible)</li>
-<li>Performance overhead accumulates even when failures are labeled "exceptional"</li>
+<li>Documentation is sufficient with discipline (documentation rots in practice)</li>
+<li>A clean happy path is clearer (it also hides what can fail)</li>
+<li>Exceptions are for rare cases, so their cost doesn't matter (expected failures aren't rare)</li>
 </ul>
 </div>
 </div>
 
-## What the Evidence Says
+## Where the Structural Arguments Point
 
-The arguments that favor Results are structural, not cultural. When large portions of operations fail expectedly (cache misses, validation), treating these as exceptions creates measurable overhead at scale. Information disclosure through stack traces is default behavior with exceptions and requires active prevention. Type signatures (`Result<Order>`) are more reliable than documentation because XML comments rot. Iteration and parallelism work naturally with Results but require awkward patterns with exceptions.
+Both sides have structural arguments, meaning ones that follow from what the mechanism is rather than how carefully a team uses it. The exception camp's strongest is implicit propagation, and C# has no `?` operator to hide the explicit threading Results need. The difference is which advantages have a workaround. For a linear flow, library combinators recover most of the clean happy path, as in the earlier payment flow written with ErrorOr's `Then`:
 
-The exception camp's strongest argument is implicit propagation. Exceptions bubble naturally while Results require explicit threading through intermediate layers. This is genuine convenience, but it comes at a cost of invisible failures. When a method returns `Order`, the signature doesn't reveal whether it throws, what it throws, or why.
+```csharp
+public ErrorOr<PaymentConfirmation> ProcessPayment(PaymentRequest request) =>
+    ValidateRequest(request)
+        .Then(_ => _paymentService.Charge(request))
+        .Then(charge => _repository.SaveTransaction(charge));
+```
 
-Results have valid concerns. C# doesn't enforce handling, scattered error logic is possible, and framework integration creates friction. But these are execution risks, not structural flaws. With discipline and static analyzers, Results provide better defaults for high-frequency expected failures.
+Async steps and steps that need several earlier values push combinators toward nested lambdas, so the recovery is partial. Exceptions have no workaround for per-item outcomes, typed fallibility, or cheap hot-path failures except catching and converting, which produces a Result by another name.
 
-Use Results for domain operations (validation, business rules, service calls) and exceptions for programming errors (null references, contract violations). Framework exceptions can still be handled by orchestration layers. Use `Task.WhenAll` with Results for parallel operations. Centralize error handling decisions in orchestration layers that handle both Results and framework exceptions.
+That suggests a hybrid of exceptions by default and Results at the seams. In a distributed system the seams aren't few. Every downstream call, message handler, and batch is one. And a hybrid decides each method's failure contract case by case, so a caller can't tell from a signature which convention it follows. A default makes the signature answer that question the same way for every domain outcome. Infrastructure faults throw under either design, so the consistency covers the outcomes callers decide about, and those are the ones a signature needs to show.
+
+Implicit propagation is genuine convenience, but it comes at a cost of invisible failures. When a method returns `Order`, the signature doesn't reveal whether it throws, what it throws, or why. A `Result<Order>` with an open error list, rather than a closed set like a C# 15 union, doesn't say every way it can fail either, but a partial, typed channel for the expected outcomes still beats no channel.
+
+Both sides depend on discipline, but not the same kind. A forgotten Result that carries a value still fails loudly, since FluentResults throws when you read `.Value` from a failure. The silent case is a discarded Result with no value, and that is a local fact about one call. The SDK's own CA1806 rule can flag it once you raise its severity from suggestion and list your Result-returning methods in its `additional_use_results_methods` option, an upkeep cost but a checkable one. Keeping `<exception>` comments current means tracing every throw through the call graph, which third-party checked-exception analyzers attempt and the SDK doesn't ship.
+
+That reasoning comes down to a short set of rules:
+- Return Results for expected domain outcomes, such as validation, business rules, and declined or unavailable downstream services
+- Throw exceptions for programming errors, such as null references and contract violations
+- Translate a framework exception into a Result at the adapter only when the caller has a decision to make about it, such as a timeout that triggers a fallback or a unique-key violation that means "already exists," and let the rest propagate
+- Run parallel work as `Task.WhenAll` over Results, converting any exception an item throws into a failed Result at the item boundary, so one fault can't discard the other outcomes
+- Centralize error handling decisions in orchestration layers that handle both Results and the framework exceptions that propagate
+
+Callers face two channels, a Result to check and exceptions that can still propagate. The exception channel is the boundary catch an exception-only design already has, so the added work is the Result branch, where the caller's decisions were going to live anyway.
 
 ## Why the Resistance?
 
-If structural arguments favor Results, why does the exception camp remain strong?
+**Paradigm friction** explains part of the resistance. C# grew up with exceptions as its only failure channel, while the functional tradition that shaped Rust treats expected failures as data, so preferring exceptions in C# follows the language's history as much as any weighing of the arguments.
 
-**Paradigm friction** explains part of the resistance. OOP treats errors as exceptional control flow that interrupts normal execution. Functional programming treats errors as data, another value to transform. C# developers gravitating toward exceptions reflects paradigm alignment, not just familiarity. But modern distributed systems are functional problems (stateless services, data pipelines), even when written in OOP languages. Results fit these architectures better.
-
-**The Frozen Caveman pattern** also contributes: "Exceptions work if done correctly, and I've learned how to do them correctly." This solves yesterday's problem (poor exception handling) rather than today's problem. When a large portion of operations return expected failures (distributed system timeouts, offline-first sync conflicts, parallel batch processing), exceptions require working around their design, not just using them correctly.
+**Hard-won expertise** also contributes: "Exceptions work if done correctly, and I've learned how to do them correctly." This solves yesterday's problem (poor exception handling) rather than today's problem. When a large portion of operations return expected failures, exceptions require working around their design, not just using them correctly. Resilience pipelines such as Polly keep retries and simple substitute-value fallbacks out of the intermediate layers, but per-item outcomes and fallbacks that need domain context still land there as try-catch blocks.
 
 ## What I Learned
 
@@ -259,7 +275,7 @@ If structural arguments favor Results, why does the exception camp remain strong
 <p>Result types should be the default for domain operations, not because they're perfect, but because the structural advantages outweigh the execution risks.</p>
 </blockquote>
 
-Despite my preferences, the evidence (at least conceptually) has led me to conclude that Result types should be the default for domain operations. Not because Results are perfect (C# doesn't enforce them, they create framework friction, and misuse can scatter error handling), but because the structural advantages outweigh the execution risks. Performance at scale, safe boundaries by default, visible failures, and natural iteration patterns matter more than implicit propagation convenience.
+Despite my preferences, the evidence (at least conceptually) has led me to conclude that Result types should be the default for domain operations. Not because Results are perfect, but because the structural advantages outweigh the execution risks. Visible failures, safe errors for the failures you model, and natural iteration patterns matter more than implicit propagation convenience where expected failures are frequent and callers act on them, and on hot paths the lower cost is a further gain. In a codebase of linear operations with few caller decisions, the balance is closer. The default is the pattern, not a library, so a team can move from today's libraries to C# 15 unions when it wants closed error sets.
 
 Paradigm friction makes this a hard sell, and "do exceptions correctly this time" reflects genuine discipline. But when an increasing number of use cases can and will return expected failures, you need mechanisms designed for common outcomes, not rare anomalies.
 

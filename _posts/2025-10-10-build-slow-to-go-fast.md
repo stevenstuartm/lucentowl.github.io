@@ -18,7 +18,7 @@ sources:
 
 Most architects have sat in a meeting where leadership demands faster delivery. "Our competitors ship features weekly!" "We need to be first to market!" "We'll fix the technical issues later!" What gets decided under that pressure tends to outlive everyone who was in the room.
 
-The premise driving that meeting is weaker than it sounds. Golder and Tellis studied roughly 500 brands across 50 product categories and found that pioneers failed 47% of the time against 8% for the early market leaders who followed them, with surviving pioneers holding about 10% market share against 28%. Those leaders entered an average of thirteen years later, so the study says more about patience than about engineering discipline. But it does undercut the "first to market" demand, and the assumption behind it that arriving first is what wins. Shipping weekly is a separate demand, and it's compatible with everything below, as long as what ships weekly is the decisions that are cheap to undo.
+The premise driving that meeting is weaker than it sounds. Golder and Tellis studied roughly 500 brands across 50 product categories and found that pioneers failed 47% of the time against 8% for the early market leaders who followed them, with surviving pioneers holding about 10% market share against 28%. Those leaders entered an average of thirteen years later, so the study says more about patience than about engineering discipline. But it does undercut the "first to market" demand, and the assumption behind it that arriving first is what wins. Shipping weekly is a separate demand, and it's compatible with everything below, as long as the expensive decisions under each weekly increment were designed first or ship in reversible steps.
 
 ## Architectural Costs Arrive Late and Get Blamed on Something Else
 
@@ -45,12 +45,12 @@ The test is not how important a decision feels. It's what undoing it would cost 
 | Data model / schema | Migrating live data, updating every consumer, a backfill window | Days |
 | Service boundaries | Re-splitting deployed services, renegotiating contracts | Days (a module boundary first, if placement is unknown) |
 | Auth / security model | Credential migration, audit re-certification | Days |
-| Public API contract | Version support burden, client coordination | Hours to days |
+| Public API contract | Version support burden, clients whose code you can't migrate | Days |
 | Internal library choice | Swap behind an interface | Hours |
 | UI layout | Redeploy | Ship and measure |
 | Feature flags / config | Change a value | Ship and measure |
 
-The days produce something checkable, such as a reviewed data model, a rehearsed migration path, or contract tests for a boundary. An answer is knowable when the team has built this kind of system before, has seen the access patterns, and knows who the consumers are. When those are missing, the same days go into making the decision cheap to move instead.
+The days produce something checkable, such as a reviewed data model, a rehearsed migration path, or contract tests for a boundary. An answer is knowable when the team has built this kind of system before, has seen the access patterns, and knows who the consumers are. When those are missing, the same days go into making the decision cheap to move instead. Expand-and-contract migrations already make additive schema changes cheap, so the days belong to the changes they don't cover, like splitting an entity or changing its keys. Reversal cost also isn't the only axis. A config change is cheap to undo but can do damage before anyone undoes it, which calls for a staged rollout rather than design days.
 
 ## Where Building Deliberately Is the Wrong Call, and the Mistake Teams Actually Make
 
@@ -88,11 +88,11 @@ The numbers can come from data the team already has, such as cycle time on chang
 
 An architectural proposal that asks for budget or schedule should be able to answer these questions: What business problem does this solve? What's the risk if we don't do this? What's the ROI and time horizon? How does this affect competitive position? "It keeps an expensive decision reversible until we know more" is a complete answer to the last two.
 
-If you can't state the risk of not doing it, you don't understand the problem yet.
+If you can't state the risk of not doing it, even as "unknown, and this caps it," you don't understand the problem yet.
 
 ### Leaders: Reward Prevented Incidents, Not Heroic Saves
 
-What you measure and reward is what you get. Prevention is invisible by design, so an organization that only sees saves ends up promoting the people who fight the fires its shortcuts started. Prevention can be made visible by comparing incidents per change in modules that got design investment against those that didn't. Celebrate teams that prevent incidents through design, not just heroic firefighting. Promote engineers who ensure long-term maintainability. Measure velocity over quarters, not just sprints. Make technical debt visible alongside revenue metrics.
+What you measure and reward is what you get. Prevention is invisible by design, so an organization that only sees saves ends up promoting the people who fight the fires its shortcuts started. Prevention can be made visible by comparing a module's incidents per change before and after it got design investment. Celebrate teams that prevent incidents through design, not just heroic firefighting. Promote engineers who ensure long-term maintainability. Measure velocity over quarters, not just sprints. Make technical debt visible alongside revenue metrics.
 
 ### Teams: Validate Assumptions Before Production Does
 
@@ -113,5 +113,5 @@ The balance isn't achieved by splitting the difference between speed and quality
 - Watch the leading indicators, because revenue moves last
 
 <blockquote class="pull-quote">
-<p>For decisions that are hard to reverse, you pay either up front in design time, for a decision that's right or one that's cheap to move, or later in migration, when everything built on top has to move with it.</p>
+<p>For decisions that are hard to reverse, you pay either up front in design time, for a decision that's right or one that's cheap to move, or, when the guess was wrong, later in migration, when everything built on top has to move with it.</p>
 </blockquote>

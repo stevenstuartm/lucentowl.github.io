@@ -221,7 +221,7 @@ Watch for three patterns during self-review — these are prose-rhythm judgment 
 - Introducing bulleted lists that stand alone as their own paragraph
 - Setting up a formal enumeration ("Three factors matter: first, second, third")
 
-See "Sentence Flow and Punctuation" below for the general rule on colons that join two independent clauses instead of setting up a list — default to a period there.
+See "Sentence Flow and Punctuation" above for the general rule on colons that join two independent clauses instead of setting up a list — default to a period there.
 
 ### Prose Economy
 

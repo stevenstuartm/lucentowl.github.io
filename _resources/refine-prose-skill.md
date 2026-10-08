@@ -1,27 +1,29 @@
 ---
-title: "Claude Prose Linter"
+title: "AI Prose Linter Skill"
 layout: resource
 type: code
 category: "AI"
-description: "A portable Claude skill (v1.0.0) that mechanically lints prose against a fixed rule set of AI-tell phrases, em-dashes, and filler words, then runs a self-review pass for judgment calls a grep can't catch."
-last_updated: 2026-07-09
+description: "A portable, agent-agnostic skill (v1.1.0) that mechanically lints prose against a fixed rule set of AI-tell phrases, em-dashes, and filler words, then runs a self-review pass for judgment calls a grep can't catch."
+last_updated: 2026-10-08
 tags: [ai-agents, workflow, writing, editing, documentation, automation]
 ---
 
-A skill for linting and refining prose: blog posts, docs, drafts. It runs in Claude Code, Claude.ai, and Cowork alike. It runs two passes. First, a set of exact-match mechanical checks (AI-tell phrases like "the key insight," em-dashes, filler words) looped until every pattern returns zero matches. Second, a self-review pass for the things a literal grep cannot catch: header outline quality, bullet-vs-prose balance, generic examples, choppy rhythm.
+A skill for linting and refining prose such as blog posts, docs, and drafts. It is plain Markdown and regex with no code to install, so it runs in any agent that can read files and search text. Agents that support the `SKILL.md` format load it as a skill. For any other agent, point it at `SKILL.md` as instructions.
 
-The base skill is two files, self-contained and portable: `SKILL.md` carries the orchestration, `writing-standards.md` carries the ruleset, including the mechanical-check patterns. Neither depends on anything else to run. Install by saving both into `.claude/skills/refine-prose/` (or wherever your environment keeps skills):
+It runs two passes. First, a set of exact-match mechanical checks (AI-tell phrases like "the key insight," em-dashes, "name" and "cost" used as vague verbs, filler words) loops until every pattern returns zero matches. Second, a self-review pass covers what a literal grep cannot catch, like header outline quality, bullet-vs-prose balance, generic examples, and semicolons or colons that should be two sentences.
+
+The base skill is two files, self-contained and portable. `SKILL.md` carries the orchestration, and `writing-standards.md` carries the ruleset, including the mechanical-check patterns. Neither depends on anything else to run. Install by saving both into a `refine-prose/` folder wherever your agent keeps skills (for Claude Code, that's `.claude/skills/`):
 
 ```
-.claude/skills/refine-prose/
+refine-prose/
 ├── SKILL.md
 └── writing-standards.md
 ```
 
-On top of that base, the skill supports an optional `platforms/` directory for stack-specific rules that only apply when a project matches their `detect:` condition. This isn't part of the shipped package; it's an extension point a project adds for its own quirks. The third file below, `platforms/jekyll-kramdown.md`, is a worked example for Jekyll/Kramdown sites, add it (or a sibling file for your own stack) only if you want that layer. Nothing in `SKILL.md` or `writing-standards.md` needs to change either way:
+On top of that base, the skill supports an optional `platforms/` directory for stack-specific rules that only apply when a project matches their `detect:` condition. This isn't part of the shipped package. It's an extension point a project adds for its own quirks. The third file below, `platforms/jekyll-kramdown.md`, is a worked example for Jekyll/Kramdown sites. Add it (or a sibling file for your own stack) only if you want that layer. Nothing in `SKILL.md` or `writing-standards.md` needs to change either way:
 
 ```
-.claude/skills/refine-prose/
+refine-prose/
 ├── SKILL.md
 ├── writing-standards.md
 └── platforms/
@@ -31,12 +33,12 @@ On top of that base, the skill supports an optional `platforms/` directory for s
 ---
 
 <details markdown="1">
-<summary><code>.claude/skills/refine-prose/SKILL.md</code></summary>
+<summary><code>refine-prose/SKILL.md</code></summary>
 
 ~~~markdown
 ---
 name: refine-prose
-version: 1.0.0
+version: 1.1.0
 description: Use when asked to lint, refine, clean up, polish, or "run the linter and fix" a piece of prose content (blog post or draft). Formalizes the loop of running the mechanical linter to a clean state and then doing the narrative self-review the linter can't do. Do not use for a full publishability/editorial review (thesis, scholarly quality, title options).
 ---
 
@@ -46,15 +48,15 @@ Formal, self-contained orchestration for "run the linter and refine as needed." 
 
 ## File resolution
 
-Explicit file path argument > file currently open in the IDE (`ide_opened_file` context, when available — this signal only exists in IDE-connected environments like Claude Code; skip it elsewhere) > file the user has uploaded or is discussing in the current conversation > ask the user. Don't ask if an earlier signal is present.
+Explicit file path argument > file currently open in the user's editor (when the environment exposes it; skip this signal elsewhere) > file the user has uploaded or is discussing in the current conversation > ask the user. Don't ask if an earlier signal is present.
 
 ## Orchestration — follow in order, don't skip steps
 
 **1. Resolve the target file** and read it.
 
-**2. Check for a matching platform doc.** Enumerate the `platforms/*.md` files in this skill's own directory (in Claude Code that's `.claude/skills/refine-prose/platforms/`; in other environments, wherever this skill is installed). Each file's frontmatter has a `detect:` field describing, in plain English, the signal that makes it apply (a config-file fingerprint, or the user naming the tech explicitly). If one or more match the current project, read them — their mechanical patterns and rules layer on top of `writing-standards.md` for steps 3–4 and 7 below. No match is the common case when sharing this skill outside its original project and is not an error; just proceed with the universal rules only.
+**2. Check for a matching platform doc.** Enumerate the `platforms/*.md` files in this skill's own directory (the `platforms/` folder next to this file, wherever the skill is installed). Each file's frontmatter has a `detect:` field describing, in plain English, the signal that makes it apply (a config-file fingerprint, or the user naming the tech explicitly). If one or more match the current project, read them — their mechanical patterns and rules layer on top of `writing-standards.md` for steps 3–4 and 7 below. No match is the common case when sharing this skill outside its original project and is not an error; just proceed with the universal rules only.
 
-**3. Run the mechanical checks.** `writing-standards.md`'s "Mechanical Checks" section (plus any matched platform doc's own patterns) lists a small set of regex patterns — literal phrases, em-dashes, and any platform-specific syntax checks. Run each one against the target file's text, skipping frontmatter and code blocks. Use whichever text-search tool is available in the current environment: the Grep tool in Claude Code, `grep -inE` via a bash/terminal tool, or scanning the file's text directly with regex if no search tool is available. These are exact-match, not heuristics: a hit is always an Error, never a judgment call.
+**3. Run the mechanical checks.** `writing-standards.md`'s "Mechanical Checks" section (plus any matched platform doc's own patterns) lists a small set of regex patterns — literal phrases, em-dashes, and any platform-specific syntax checks. Run each one against the target file's text, skipping frontmatter and code blocks. Use whichever text-search tool is available in the current environment: the agent's built-in search tool, `grep -inE` via a shell, or scanning the file's text directly with regex if no search tool is available. These are exact-match, not heuristics: a hit is always an Error, never a judgment call.
 
 **4. Fix every Error**, one at a time, against the rule that flagged it in `writing-standards.md` or the matched platform doc — not a mechanical find/replace. Each fix should restate the point directly, not just delete the flagged phrase.
 
@@ -65,13 +67,14 @@ Explicit file path argument > file currently open in the IDE (`ide_opened_file` 
 - Are examples concrete (specific numbers, named tradeoffs) or generic and dismissible?
 - Is prose used for explaining/reasoning, with bullets reserved for actual lists, steps, or comparisons — not as a crutch?
 - Any AI-tell pattern too variable for an exact-match grep: announcement sentences ("Here's what this means:"), redundant restatements of a point the prose just made, scaffolding sentences that only introduce what follows, choppy rhythm from missing conjunctions
+- Semicolon/colon overuse: for each semicolon or colon joining two clauses, confirm it's a genuine parallel contrast (semicolon) or formal enumeration (colon) per `writing-standards.md`'s "Sentence Flow and Punctuation" section — if not, split into two sentences
 - Any matched platform doc's own voice/formatting conventions (e.g. blog-post voice balance)
 
 **7. Report back**: final mechanical-check status (should be zero matches across all patterns), a summary of what changed, which judgment-call issues were intentionally left as-is and why, and any open judgment calls to flag for the user's own read-through. Do not declare the document "done" — final judgment on accuracy and nuance stays with the user.
 
 ## Portability
 
-To use this in a different project or environment: copy the whole `refine-prose/` directory (in Claude Code, that lives at `.claude/skills/refine-prose/`; in Claude.ai or Cowork, a user's skill directory) to the target location. `writing-standards.md` and the orchestration in this file are both platform-agnostic as written — step 2 never names a specific platform; it only ever reads whatever `detect:` condition each file in `platforms/` declares for itself and applies that file's rules when the condition matches. SKILL.md doesn't know or care what's currently inside `platforms/` — whatever ships in that directory, gets added to it, or gets deleted from it, this file's logic doesn't change. If no file's `detect:` condition matches the target project, the skill runs with the universal rules only. No manual stripping needed, and no code to port — everything is a markdown doc plus regex patterns run directly against the file's text.
+To use this in a different project or agent: copy the whole `refine-prose/` directory to wherever that agent loads skills from. Agents that support the `SKILL.md` format pick it up by its `description`. For one that doesn't, point it at `SKILL.md` as instructions; every other file is reached from there by relative path. `writing-standards.md` and the orchestration in this file are both platform-agnostic as written — step 2 never names a specific platform; it only ever reads whatever `detect:` condition each file in `platforms/` declares for itself and applies that file's rules when the condition matches. SKILL.md doesn't know or care what's currently inside `platforms/` — whatever ships in that directory, gets added to it, or gets deleted from it, this file's logic doesn't change. If no file's `detect:` condition matches the target project, the skill runs with the universal rules only. No manual stripping needed, and no code to port — everything is a markdown doc plus regex patterns run directly against the file's text.
 
 To add support for a project's own platform quirks (a static-site generator, a docs framework with its own markdown dialect, a house voice convention), add a new file to `platforms/` following the same shape: frontmatter with a `detect:` field, then the additional mechanical patterns and judgment-call rules. Nothing outside `platforms/` needs to change to support it.
 ~~~
@@ -79,7 +82,7 @@ To add support for a project's own platform quirks (a static-site generator, a d
 </details>
 
 <details markdown="1">
-<summary><code>.claude/skills/refine-prose/writing-standards.md</code></summary>
+<summary><code>refine-prose/writing-standards.md</code></summary>
 
 ~~~markdown
 # Writing Standards
@@ -90,13 +93,13 @@ These standards apply to ALL narrative content: blog posts, page content, descri
 
 ## Mechanical Checks
 
-These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file's text (case-insensitive, skip frontmatter and code blocks), using the Grep tool where available (Claude Code), `grep -inE` via a bash/terminal tool, or a direct regex scan of the file's text otherwise. Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
+These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file's text (case-insensitive, skip frontmatter and code blocks), using the agent's built-in search tool, `grep -inE` via a shell, or a direct regex scan of the file's text otherwise. Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
 
-The ripgrep engine that backs Claude Code's Grep tool does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below). If you're running these patterns with a regex engine that does support lookahead (e.g. Python's `re`, or grep -P), that's fine too — the patterns below work either way.
+Some regex engines, including ripgrep (which backs several coding agents' built-in search), do not support lookahead/lookbehind, and an agent's search tool may report a pattern that uses `(?!...)` or `(?=...)` as zero matches instead of an error, which would produce false negatives. None of the patterns below use them; where an exception would need a lookahead, it is a written note instead (see "the insight" below). Engines that do support lookahead (Python's `re`, `grep -P`) run the patterns below the same way.
 
 **AI-tell phrases**:
 ```
-\b(the key insight|the insight|the takeaway|it'?s (important to note|worth noting)|it should be noted|in conclusion|in summary|final version|final conclusion|ultimately|essentially|fundamentally|at the end of the day|the bottom line is|something (real|genuine|tangible|meaningful)|the question isn'?t|the question is|worth \w+ing|is reasonable|distinction matters|failure modes?)\b
+\b(the key insight|the insight|the takeaway|it'?s (important to note|worth noting)|it should be noted|in conclusion|in summary|final version|final conclusion|ultimately|essentially|fundamentally|at the end of the day|the bottom line is|something (real|genuine|tangible|meaningful)|the question isn'?t|the question is|worth \w+ing|is reasonable|distinction matters|failure modes?|sharp(er|est))\b
 ```
 Each of these announces or hedges instead of stating the point directly:
 - "the key insight" / "the insight" / "the takeaway" → state the point, drop the label. Exception: skip a hit where "the insight" is immediately followed by "into" (e.g. "the insight into the problem") — that's legitimate usage, not the AI-tell phrase.
@@ -110,6 +113,7 @@ Each of these announces or hedges instead of stating the point directly:
 - "is reasonable" → vague; state specifically what makes it acceptable or why it works
 - "distinction matters" → announces importance without stating it; state the distinction and its consequence directly
 - "failure mode(s)" → describe the specific failure instead
+- "sharper" / "sharpest" (e.g., "the objection is sharpest on back-office screens", "a sharper version of the argument") → vague intensifier standing in for a claim; say what makes it stronger, harder to answer, or more costly in that case
 
 **"Real" as filler** (two separate patterns — the adjective form and the noun-modifier form):
 ```
@@ -119,6 +123,18 @@ Each of these announces or hedges instead of stating the point directly:
 \b\w+\s+real\s+(work|value|output|results?|impact|progress|problems?|issues?|cost|benefit|change|difference|data|code|tests?|features?|improvements?|gains?|savings?|performance|quality|effort|time|speed|scale)\b
 ```
 "X is/are real" (e.g., "the costs are real") and "[verb] real [noun]" (e.g., "does real work") are both vague qualifiers — describe specifically what you mean instead. The first pattern's trailing `([^-\w]|$)` excludes compounds like "real-time" or "real-world" (no lookahead needed — it just requires the character after "real", if any, to not continue the word or start a hyphenated compound).
+
+**"Name" as a verb**:
+```
+\b(name|names|named|naming)\s+(the|a|an|this|that|these|those|it|its|their|each|every)\b
+```
+"The advice names the outcome", "the report named this pressure", "Name the service that owns it" all use "name" to stand in for a more exact verb. Say what the subject actually does: states, blames, identifies, lists, traces, or, in a checklist, finds. The pattern requires a determiner right after the word, so the noun ("claim names", "field names") and the adjective ("a named owner") don't match.
+
+**"Cost" as a verb for a non-financial loss**:
+```
+\bcost(s|ing)?\s+(it|them|him|her|us|you|its|their)\b
+```
+"Moving it to the gateway costs it all three", "what it costs you", "the split cost them" dress up a loss or a tradeoff as a price. Say what is lost or given up: "In the gateway, it loses all three", "you give up the ability to write in more than one region". Exception: skip a hit where the object is actually money ("costing us $30K per month"). The noun ("the cost of X") doesn't match.
 
 **AI-tell colon constructions**:
 ```
@@ -130,7 +146,7 @@ These announce importance rather than stating it directly.
 ```
 —
 ```
-Avoid em-dashes in prose; use semicolons, commas, or periods instead. Parentheses are acceptable for clarifying asides.
+Avoid em-dashes in prose. Use commas or periods instead. Parentheses are acceptable for clarifying asides.
 
 **Fixing a hit** — restate the point directly, don't just delete the flagged phrase:
 ```
@@ -198,29 +214,35 @@ Prefer "tend to", "might", "can", "often", "rarely" over absolute constructions.
 
 ### Sentence Flow and Punctuation
 
-**Semicolons are for parallel contrast; comma+and is for sequential cause.** Using a semicolon where "and" belongs creates a false equivalence:
-- ❌ "The lag is measured in years; by the time the drift is painful, the decision is untraceable." (the second clause is a consequence, not a parallel)
-- ✅ "The lag is measured in years, and by the time the drift is painful, the decision is untraceable."
-- ✅ "Reads are fast; writes are slow." (genuine parallel contrast — semicolon is correct)
+**Default to two sentences.** When two clauses could be joined with a semicolon or colon, a period is usually the clearer choice, and it's the safer one when it's not obvious which reads better. Reach for a semicolon or colon only when it earns its place: a genuine parallel contrast, or a formal enumeration. They are not banned, but they should be a deliberate exception, not the reflexive way to avoid two sentences in a row.
 
-**Use semicolons and commas for natural flow**:
-- ❌ "Something is broken in production. You need to fix it." (choppy)
-- ✅ "Something is broken in production, and you need to fix it." (natural)
-- ❌ "Most troubleshooting failures aren't from lack of effort. Engineers work hard during incidents."
-- ✅ "Most troubleshooting failures aren't from lack of effort; engineers work hard during incidents."
+**Semicolons are for parallel contrast, not for gluing sequential or causal clauses together:**
+- ❌ "The lag is measured in years; by the time the drift is painful, the decision is untraceable." (the second clause is a consequence, not a parallel — split it)
+- ✅ "The lag is measured in years. By the time the drift is painful, the decision is untraceable."
+- ✅ "Reads are fast; writes are slow." (genuine parallel contrast — semicolon earns its place)
+- ❌ "Most troubleshooting failures aren't from lack of effort; engineers work hard during incidents." (the second clause supports the first, it's not a parallel)
+- ✅ "Most troubleshooting failures aren't from lack of effort. Engineers work hard during incidents."
 
-**Avoid run-on sentences that force buffering**:
-- Don't chain too many thoughts together; the reader shouldn't need to hold an entire sentence in memory to understand the conclusion
+**Colons follow the same rule.** Use a colon to set up a list or a formal enumeration, not as a way to tack an explanation onto a sentence instead of starting a new one:
+- ❌ "The fix is simple: update the config and redeploy." (the colon is just deferring a second sentence)
+- ✅ "The fix is simple. Update the config and redeploy."
+- ✅ "Three factors matter: latency, cost, and reliability." (formal enumeration — colon earns its place)
+
+**Two short related sentences are not "choppy" — they're usually the clearest option.** Don't reach for a semicolon, colon, or comma+and just to avoid two short sentences in a row:
+- ✅ "Something is broken in production. You need to fix it."
+- Join with "and" only when splitting would actually lose a tight sequential or causal link, and even then prefer it over a semicolon — a semicolon implies parallel structure that a causal "and" doesn't have.
+
+**Avoid run-on sentences that force buffering.** Don't chain too many thoughts together. The reader shouldn't need to hold an entire sentence in memory to understand the conclusion:
 - ❌ "With reproduction, you have a test case that consistently triggers the race condition; after your fix, the test passes, and you know it works before it touches production."
 - ✅ "With reproduction, you have a test case that consistently triggers the race condition. After your fix, the test passes. You know it works before it touches production."
 - ❌ "If the answer is 'exception in cleanup code path,' the fix isn't just patching that one path; it's recognizing that error-handling code paths lack test coverage across the system."
 - ✅ "If the answer is 'exception in cleanup code path,' the fix isn't just patching that one path. It's recognizing that error-handling code paths lack test coverage across the system."
 
 **Guidelines**:
-- Use commas/semicolons to connect two related thoughts
-- Use periods when adding a third thought or when the combined sentence becomes too long
-- Write as you think: natural internal narrative, not telegraphic fragments
-- Each sentence should carry one clear idea or two closely related ideas, not three or more
+- Default to periods. Reserve a semicolon for genuine parallel contrast and a colon for a list or formal enumeration — nothing else.
+- If it's not obvious whether a semicolon or colon is earning its place, split into two sentences instead. That's the safe default, not a fallback.
+- Write as you think: natural internal narrative, not telegraphic fragments. "Natural" means varied sentence length, not compressed sentences stitched together with punctuation.
+- Each sentence should carry one clear idea. Don't reach for a semicolon or colon to cram a second idea into the same sentence when two sentences would read more clearly.
 
 ### Section Structure and Header Hierarchy
 
@@ -285,7 +307,8 @@ Watch for three patterns during self-review — these are prose-rhythm judgment 
 **When colons ARE appropriate**:
 - Introducing bulleted lists that stand alone as their own paragraph
 - Setting up a formal enumeration ("Three factors matter: first, second, third")
-- After complete independent clauses that introduce what follows
+
+See "Sentence Flow and Punctuation" above for the general rule on colons that join two independent clauses instead of setting up a list — default to a period there.
 
 ### Prose Economy
 
@@ -426,14 +449,14 @@ Blog voice conventions (introduction style, first-person balance across a post) 
 ## Content Quality Workflow
 
 1. **Draft**: Write content applying the principles above
-2. **Refine**: Run `/refine-prose` on the file — it runs the mechanical checks to a clean state, then self-reviews for narrative flow, concrete examples, section titles, and bullet-vs-prose balance
+2. **Refine**: Run the `refine-prose` skill on the file (`/refine-prose` in agents with slash commands) — it runs the mechanical checks to a clean state, then self-reviews for narrative flow, concrete examples, section titles, and bullet-vs-prose balance
 3. **Manual review**: User reviews for nuanced issues, content accuracy, and overall quality
 ~~~
 
 </details>
 
 <details markdown="1">
-<summary><code>.claude/skills/refine-prose/platforms/jekyll-kramdown.md</code></summary>
+<summary><code>refine-prose/platforms/jekyll-kramdown.md</code></summary>
 
 ~~~markdown
 ---
@@ -459,13 +482,13 @@ Kramdown's inline attribute list (IAL) syntax is how this platform opens a link 
 [Link Text](https://example.com){:target="_blank" rel="noopener noreferrer"}
 ```
 
-Always include `rel="noopener noreferrer"` alongside `target="_blank"`. This is an exact-match mechanical check, same as the ones in `writing-standards.md` — run it with Grep whenever this platform doc is in scope:
+Always include `rel="noopener noreferrer"` alongside `target="_blank"`. This is an exact-match mechanical check, same as the ones in `writing-standards.md` — run it with the same search tool whenever this platform doc is in scope:
 
 ```
 \]\(https?://[^)]+\)($|[^{])
 ```
 
-(No lookahead — ripgrep's engine doesn't support it. This works the same way: if the closing `)` is immediately followed by `{`, that's the start of `{:target=...}` and the link is compliant; anything else immediately after, or end of line, means the attribute is missing.)
+(No lookahead, since some engines, ripgrep included, don't support it. This works the same way: if the closing `)` is immediately followed by `{`, that's the start of `{:target=...}` and the link is compliant; anything else immediately after, or end of line, means the attribute is missing.)
 
 Any hit is a markdown link to an external URL missing the `{:target=...}` attribute — add it. This pattern is meaningless outside a Kramdown project (other platforms don't use IAL syntax at all), which is exactly why it lives here instead of in the universal `writing-standards.md` list.
 

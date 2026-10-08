@@ -1,6 +1,6 @@
 ---
 name: refine-prose
-version: 1.0.0
+version: 1.1.0
 description: Use when asked to lint, refine, clean up, polish, or "run the linter and fix" a piece of prose content (blog post or draft). Formalizes the loop of running the mechanical linter to a clean state and then doing the narrative self-review the linter can't do. Do not use for a full publishability/editorial review (thesis, scholarly quality, title options).
 ---
 
