@@ -2,9 +2,17 @@
 
 Review publishable content against the site's highest quality standards before it goes live. Accepts an optional file path as argument.
 
-**Usage**: `/review-publishable _posts/YYYY-MM-DD-title.md`
+**Usage**: `/review-publishable [file] [iterate] [convince-me]`
 
 **File resolution**: Use the file path argument if one is given. Otherwise use the file currently open in the IDE (`ide_opened_file` context) — this is the common case and should not require confirmation. Only ask the user which file to review if neither signal is present (no argument and no `ide_opened_file` context at all).
+
+**Modes**: `iterate` and `convince-me` are keywords, accepted in any order and alongside the file path. Any other argument is the file. With neither keyword, run the single review below. Either keyword runs unattended: every finding is resolved in the file without waiting for the author (see **Autonomous resolution** at the end of this file). Each mode is defined in its own section at the end of this file:
+
+| Mode | What it adds | Stops when |
+| --- | --- | --- |
+| `iterate` | Repeats the full review, each round in a fresh subagent that has never seen the post | A round needs no updates, or three rounds have run |
+| `convince-me` | After the review, fresh skeptic subagents read the post and say whether it convinced them. The orchestrator revises after each one | A skeptic is convinced |
+| both | `iterate` runs to completion first, then `convince-me` | Both conditions are met |
 
 ---
 
@@ -327,3 +335,73 @@ Review these decisions: [IDs of Decided findings, or "none"]
 Still open: [IDs of Asked findings, or "none"]
 
 ---
+
+## Autonomous resolution (both modes)
+
+`iterate` and `convince-me` exist to refine the post faster and more objectively than the author can, so they never wait for the author. The author supplies the ideas, the agents refine them, and the author reviews the result later with `git diff`. Under either keyword, these rules replace the ASK rules above, for the orchestrator and for every subagent it dispatches:
+
+- **There is no ASK class.** A finding the single review would classify ASK is resolved as **Decided**: make the call, apply it to the file, and record the call and the rejected alternative in the ledger so the author can reverse it on purpose.
+- **Strategic calls are applied.** Reordering sections, adding a table or artifact, cutting or merging a section, reconciling a contradiction, and changing emphasis are all built, not proposed.
+- **Never invent.** No fabricated first-person experience, no number only the author could know, no unverifiable claim. When a fix would need one, resolve it without it: narrow the claim, ground it in a source you verified, argue it from the post's own reasoning, or cut it. The author's existing first-person text stays.
+- **Refine the author's idea, never replace it.** The thesis and the author's held positions stay. Strengthen them, narrow them where they overreach, and reconcile them with the post's own evidence, but don't swap in a reviewer's or skeptic's view.
+- **The budget still holds.** Pay for every addition with a cut, per Step 8.
+
+The ledger's **Asked** state is unused in these modes. The verdict's "Review these decisions" line carries every Decided finding, and "Still open" is "none" unless a stop condition below left something unresolved.
+
+## Mode: `iterate`
+
+Each round of `iterate` is a complete review (Steps 1-12, resolution pass included) run by a **fresh subagent** that has never seen the post. A reviewer who just edited a file reads its own fixes as correct, and a new reader doesn't. You are the orchestrator. You don't review the post yourself in this mode. You dispatch the rounds, read each ledger, and decide whether to run another.
+
+**Each round:**
+
+1. Launch a `general-purpose` agent with `run_in_background: false`. Its prompt gives it the file path and tells it to read `.claude/commands/review-publishable.md` and run Steps 1-12 on that file in full under the **Autonomous resolution** rules, editing the file in Step 11, and to return its complete report, including the findings ledger. Do not pass it any earlier round's report. Do pass the **settled list** (below), with the instruction that a settled item is re-raised only if the reviewer can state a new defect the earlier decision didn't consider.
+2. Read the returned ledger, then `git diff` the file to confirm the edits it claims are actually there. If a reviewer left a finding Asked anyway, resolve it yourself under the autonomous rules before the next round.
+3. Add every Decided finding to the settled list as one line each: the round, the ID, the passage, and the call made.
+4. Decide whether to run another round.
+
+**A round needs updates** when it raises at least one new finding that ends **Fixed** or **Decided**. Mechanical fixes count. Withdrawn findings don't, and neither do settled items a reviewer re-raises without a new defect.
+
+**Reversals**: when a round undoes or reverses an edit an earlier round made, you decide which version stands, keep it in the file, and record the call as Decided with both reviewers' reasons. Don't run another round just to break the tie.
+
+**Stop** when:
+
+- A round needs no updates. That's the normal exit: a fresh reader found nothing left to change.
+- Three rounds have run. Say so in the verdict, because a post still needing updates after three fresh reviews is a sign the scope or thesis is unsettled.
+
+**Report**: a round table (round number, updates needed yes/no, IDs fixed, IDs decided), the final round's full report, and a combined ledger of every finding from every round, each with its round prefixed (`R2-S1`). The raised and dispositioned counts cover all rounds. The verdict lists every Decided finding across all rounds.
+
+## Mode: `convince-me`
+
+`convince-me` tests whether the argument persuades a skeptical reader who has only the page. The review steps make a post correct and clear. They don't establish that it convinces anyone. Run it after the review (or after `iterate` when both are given). You are the orchestrator. Skeptics read and judge, and only you edit.
+
+**Each round:**
+
+1. Launch a fresh `general-purpose` agent with `run_in_background: false`. It never sees earlier skeptics' verdicts, earlier drafts, or your reasoning. A skeptic told what the last one objected to reads for that instead of reading the post. Give it this brief, with the file path filled in:
+
+   > You are a senior practitioner who knows this subject well and has no stake in the author's conclusion. Read `<file>`. Read only that file, and treat it as the whole case: you may web-search to check whether a cited claim is true, but not to strengthen the author's argument for them. Then decide whether the post convinced you of its thesis.
+   >
+   > Return:
+   > - **Thesis**: the post's argument in one sentence, in your own words
+   > - **Convinced**: yes, partly, or no
+   > - **What convinced you**: each part that worked, and why
+   > - **What didn't**: each objection, numbered. For each, quote the passage, give the type (missing evidence, unanswered counterargument, logical gap, overreach, unclear claim, or a factual error you verified), say why it fails to persuade you, and say what would change your mind
+   >
+   > Be specific. "Needs more evidence" is not an objection. Name the claim and the evidence that would carry it. Don't object to the author's voice or style, and don't tell the author to argue a different thesis.
+
+2. If the skeptic's thesis sentence differs from the post's thesis, record that as an objection on its own. The post didn't communicate its argument, whatever else the skeptic thought.
+3. Give each objection an ID (`V1`, `V2`, continuing across rounds) and triage it under the same rules as Steps 2-10 and the **Autonomous resolution** rules: a statable defect, the smallest edit that fixes it, and Fixed, Decided, or Withdrawn.
+   - **Fixed**: an overreach to narrow, a gap between steps that the post's own material can close, an unclear claim, a verifiable source the claim needs, or a counterargument the post can answer from its own reasoning.
+   - **Decided**: the fix needs a judgment call, such as restructuring, reconciling a contradiction, or conceding a limit. When it would need the author's experience or a number only they have, resolve it without inventing one: narrow the claim, source it, or cut it. The author's held position is never conceded to a skeptic. Strengthen the case for it or narrow it where it overreaches, but don't swap in the skeptic's view.
+   - **Withdrawn**: the objection is to voice or style, rests on a misreading the text doesn't invite, or asks for a different post.
+4. Apply every Fixed and Decided objection to the file, keeping the reading-time budget (pay for additions with cuts, per Step 8). Re-run the Step 2 mechanical checks on the changed passages.
+5. Start the next round with a new skeptic.
+
+**A returning objection**: when an objection a fix was supposed to resolve comes back in substance from a new skeptic, the fix didn't work. Try a different fix (a stronger source, a narrower claim, or a cut) and record both skeptics' reasons in the ledger.
+
+**Stop** when:
+
+- A skeptic answers **yes**. That's the only success exit.
+- Every objection in a round is Withdrawn.
+- Five rounds have run without a yes.
+
+**Report**: after the review report, a **CONVINCE-ME** section with one row per round (round number, verdict, the skeptic's thesis sentence, objection IDs, and what you changed), then every `V#` finding in the findings ledger alongside the review's own. The verdict states whether a skeptic was convinced. A post that never convinced one isn't ready to publish, so name the objections the last skeptic still held and what was tried against each.

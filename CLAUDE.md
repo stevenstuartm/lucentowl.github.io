@@ -31,6 +31,8 @@ Blog post drafts move through two stages, in order. Before them, `/post-ideas` f
 | Refine | `/refine-prose` | Any draft | Lints to clean, then narrative self-review |
 | Review | `/review-publishable` | A draft ready for final scrutiny | Full report, then a resolution pass that applies every finding to the file |
 
+`/review-publishable` takes two optional mode keywords. `iterate` repeats the full review in a fresh subagent each round until a round needs no updates, up to three rounds. `convince-me` has fresh skeptic subagents judge whether the argument persuades them, and the orchestrator revises the post between rounds until one is convinced. Both modes run unattended: every finding is resolved in the file (no ASK class), and the author reviews the diff afterward.
+
 `/refine-prose` lints to a clean state and does a narrative self-review the linter can't do. The skill and its bundled linter script live in `.claude/skills/refine-prose/`.
 
 ---

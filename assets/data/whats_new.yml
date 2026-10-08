@@ -20,9 +20,9 @@
 - id: graphql-persisted-queries
   change: new
   type: post
-  title: "GraphQL Is for Queries Nobody Can Predict"
+  title: "GraphQL Solved Facebook's Problem. Does It Solve Yours?"
   url: /blog/2026/10/07/graphql-is-for-queries-nobody-can-predict.html
-  note: "GraphQL earns its cost on graph data queried in ways nobody can predict; a team that registers every query has predicted them all, and simpler APIs serve known queries."
+  note: "GraphQL let clients write their own queries because no server team could predict Facebook's graph, and a team that locks it down to persisted queries has already shown it doesn't have that problem."
 
 - id: entitlement-not-feature-flag
   change: new
