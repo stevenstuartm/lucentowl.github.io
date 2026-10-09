@@ -89,11 +89,11 @@ But nothing on the server enforces the grouping. The endpoint accepts `isActive`
 
 ## Patch Formats and Design Guides Leave the Client Problem in Place
 
-The standards never settled partial updates. RFC 5789, which defined PATCH in 2010, left the body format open on the expectation that "no single format will be appropriate for all types of resources." Two kinds of answer grew into that gap, standardized patch formats and the API design guides large companies publish for their own APIs, and teams tend to adopt either one as the professional answer.
+The standards never settled partial updates. RFC 5789, which defined PATCH in 2010, left the body format open on the expectation that "no single format will be appropriate for all types of resources." Two kinds of answer grew into that gap, standardized patch formats and the API design guides large companies publish, and teams tend to adopt either one as the professional answer.
 
 JSON Patch, defined in RFC 6902, encodes all four intents explicitly, as add, remove, and replace operations addressed by path. A path into an array is an index, though, so removing `beta` means removing `/tags/1`, which deletes the wrong tag if someone reordered the array first, unless a `test` operation guards it. JSON Merge Patch, from RFC 7396, is simpler and covers three, but replaces arrays whole. Neither can tell a client which fields changed, so adopting one hands every caller the change-tracking problem.
 
-Design guides carry a different risk, because they aren't neutral standards but one company's internal practice, published. The field masks in Google's API Improvement Proposals are built around protobuf messages and generated clients Google produces for its own APIs. The client still has to fill each mask with the fields that changed. A server can pin each mask to one form's fields, but that groups fields by form without giving the group a URL for gateways, logs, and ETags to key on. Even Microsoft doesn't offer its REST API Guidelines as universal. It publishes them hoping other organizations will "create guidelines that are appropriate for them."
+Design guides carry a different risk, because they aren't neutral standards but one company's internal practice, published. Google's API Improvement Proposals already give state changes custom methods, but their field masks are built around protobuf messages and Google's generated clients. The client still has to fill each mask with the fields that changed. A server can pin each mask to one form's fields, but that groups fields by form without giving the group a URL for gateways, logs, and ETags to key on. Even Microsoft doesn't offer its REST API Guidelines as universal. It publishes them hoping other organizations will "create guidelines that are appropriate for them."
 
 Those choices fit organizations that own their clients, generate their SDKs, and employ governance teams to enforce conformance. Copied into a team without that, they can become ritual, kept because a large company published them rather than because they solve anything the team has.
 
@@ -154,7 +154,7 @@ The server requires every field in each body, so a body that leaves one out fail
 | Leave `phoneNumber` alone | Skip the profile PUT, or resend its current value |
 | Remove one tag | `DELETE /customers/42/tags/beta` |
 
-A mapper can still turn a value into a null the user never chose. That error doesn't vanish, but it's limited to fields the form loaded. Skipping a PUT means tracking which sections were touched, one flag per section rather than per field. Merge Patch on the same small resource would keep leave alone, but only by handing back the field-level tracking the mapper layers lose.
+A mapper can still turn a value into a null the user never chose. That error doesn't vanish, but a screen that loads its section whole limits it to fields the client fetched. Skipping a PUT means tracking which sections were touched, one flag per section rather than per field. Merge Patch on the same small resource would keep leave alone, but only by handing back the field-level tracking the mapper layers lose.
 
 `email` fails only the workflow test, and that's enough. The verification rules then live on the one endpoint that triggers them, and a PUT that resends the current address triggers nothing.
 
@@ -196,7 +196,7 @@ Small resources make that check practical. On the wide customer, a tag another a
 
 ### Adding a Writable Field Changes the Contract
 
-If `preferredName` joins the profile, an older client's PUT leaves it out, and the server either clears it or rejects the request. So the field comes with a new version of the resource. Older clients keep sending the old version's request, and the server leaves `preferredName` alone for those.
+If `preferredName` joins the profile, an older client's PUT leaves it out, and the server either clears it or rejects the request. So the field comes with a new version of the resource, which each request declares. Older clients keep sending the old version's request, and the server leaves `preferredName` alone for those.
 
 A partial update skips the version by treating missing as leave alone, the rule that stopped the phone number from being cleared. Normalizing limits versions instead, because reads gain fields freely and a field with its own owner, scope, or workflow gets its own resource. A resource that still gains writable fields every release may be better served by partial updates. For the rest, the versions that remain are the price of a body the server never guesses about.
 

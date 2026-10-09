@@ -18,6 +18,8 @@ sources:
     url: "https://www.oreilly.com/library/view/fundamentals-of-software/9781492043447/"
   - title: "Melvin Conway, How Do Committees Invent? (1968)"
     url: "https://www.melconway.com/Home/Committees_Paper.html"
+  - title: "Martin Fowler, ConwaysLaw (credits Jonny LeRoy and Matt Simons with the inverse Conway maneuver)"
+    url: "https://martinfowler.com/bliki/ConwaysLaw.html"
 ---
 
 When I encounter a system or data design decision I'm unsure about, I endeavor to ask the same thing: **where does authority live, and how bounded is it**?
@@ -26,11 +28,11 @@ When I encounter a system or data design decision I'm unsure about, I endeavor t
 
 Authority in a software system is the assignment of decision-making power. Something is authoritative over data when it is the canonical source of truth, and authoritative over a behavior when it is the only thing that can legitimately enforce it. Every design encodes a belief about where authority belongs, and that belief shapes what the system can absorb when it changes.
 
-The best practices across software engineering are each a response to a specific observed failure. Robert C. Martin's Single Responsibility Principle observed that a class holding authority over two concerns forces reasoning about both when either changes, producing behavioral drift at the class level. Database normalization, from E. F. Codd's relational model, observed that a fact stored in two places produces an inconsistency when one is updated, causing data drift.
+Four of software engineering's best-known practices each began as a response to a specific observed failure. Robert C. Martin's Single Responsibility Principle observed that a class holding authority over two concerns forces reasoning about both when either changes, producing behavioral drift at the class level. Database normalization, from E. F. Codd's relational model, observed that a fact stored in two places produces an inconsistency when one is updated, causing data drift.
 
-Least privilege reaches the same confinement from containment rather than drift. As Jerome Saltzer and Michael Schroeder framed it, it limits the damage an accident or error can do by confining each process to the power its job needs, so it can't act on state it doesn't own. Bounded contexts come from Eric Evans's domain-driven design, summarized in Martin Fowler's BoundedContext entry. They observed that two teams sharing a term without shared authority over its meaning will diverge on that meaning, creating semantic drift at the domain level. So a bounded context lets a term diverge on purpose across a boundary, with one meaning and one authority inside each context.
+Least privilege confines power too, but for containment rather than drift. As Jerome Saltzer and Michael Schroeder framed it, it limits the damage an accident or error can do by confining each process to the power its job needs, so it can't act on state it doesn't own. Bounded contexts come from Eric Evans's domain-driven design, summarized in Martin Fowler's BoundedContext entry. They observed that two teams sharing a term without shared authority over its meaning will diverge on that meaning, creating semantic drift at the domain level. So a bounded context lets a term diverge on purpose across a boundary, with one meaning and one authority inside each context.
 
-These traditions emerged from different problems, in different decades, for different audiences, and converged on the same structural answer: confine decision-making power to the concern that needs it, because distributed decision-making produces drift. When a component or even an actor holds decision-making power beyond what its concern requires, it makes decisions that other components or actors are also making, and those decisions diverge. Copies of data fed from a single owner's contract don't diverge this way, because only the owner decides.
+These traditions emerged from different problems, in different decades, for different audiences, and converged on the same structural answer: confine decision-making power to the concern that needs it. Spread beyond that concern, it produces drift or widens the damage an error can do. When a component or even an actor holds decision-making power beyond what its concern requires, it makes decisions that other components or actors are also making, and those decisions diverge. Copying data isn't the problem. Copies fed from a single owner's contract don't diverge, because only the owner decides.
 
 ## Assessing Authority Strength
 
@@ -53,15 +55,17 @@ Bond is the enforcement strength of the boundary. The strength a boundary needs 
 
 A strongly bonded authority has no known bypass, so all interactions go through its contract. A weakly bonded authority has routes around it such as direct database access, internal calls that skip validation, or shared state that circumvents the service layer. A payment processing boundary that is bypassed can produce corrupted financial state, while a read model that serves slightly stale data can tolerate a weaker bond.
 
-A read-only bypass does little damage to state but can still create heavy coupling, because every consumer of a table's shape is a party to its next migration. Weighing both parts flags the familiar shared-database anti-pattern when access is granted, not later when a migration stalls.
+A read-only bypass does little damage to state but can still create heavy coupling, because every consumer of a table's shape is a party to its next migration. Weighing both parts catches the familiar shared-database anti-pattern when access is granted, not later when a migration stalls.
+
+Contour and bond sit close to cohesion and coupling, but contour adds operational coherence, and bond counts the coupling a bypass creates at the owner's next change.
 
 ## Characteristics Should Drive Style and Team Topology
 
-We can often be so focused on code and "architecture" that we forget that there is a much broader puzzle to solve, with each aspect affecting the others. The same authority judgment applies to the teams that own the code.
+We can often be so focused on code and "architecture" that we forget that there is a much broader puzzle to solve, with each aspect affecting the others. Contour and bond apply to the teams that own the code, not only to the code.
 
 - **Architecture Characteristics**, the term Richards and Ford use in *Fundamentals of Software Architecture*, should be the primary driver of any system design decision. They are the business priority values the system must honor: cost, security, availability, scalability, deployability, and the rest. Style and team topology should be derived from them.
 - **Architectural Style** is the structural arrangement of the system, chosen to honor the characteristics. Contour and bond assess whether authority in the code is correctly placed under the pressures the characteristics describe.
-- **Team Topology** is how the organization structures ownership and decision-making. Melvin Conway's law shows the derivation often runs in reverse, as systems mirror their builders' communication structure. The inverse Conway maneuver, shaping teams to reach a target architecture, is that derivation done on purpose. We should assess authority here as well to see whether the teams have enough proximity to a domain to adapt: to draw and redraw the domain boundaries to sustain integrity and growth. A team owning two behaviorally incoherent domains has poor contour just as a class does.
+- **Team Topology** is how the organization structures ownership and decision-making. Melvin Conway's law shows the derivation often runs in reverse, as systems mirror their builders' communication structure. The inverse Conway maneuver, Jonny LeRoy and Matt Simons's term for shaping teams to reach a target architecture, is that derivation done on purpose. We should assess authority here as well to see whether the teams have enough proximity to a domain to adapt: to draw and redraw the domain boundaries to sustain integrity and growth. A team owning two behaviorally incoherent domains has poor contour just as a class does.
 
 ## Poor Contour Schedules Drift
 
@@ -83,7 +87,7 @@ By the time the drift is painful, the people who drew the boundary have often mo
 
 ## Authority in Practice: An Order Workflow
 
-An order workflow, built here as an illustration rather than a case history, is a useful thread because it touches most of the patterns where authority gets misplaced.
+An order workflow, built here as an illustration rather than a case history, touches most of the patterns where authority gets misplaced.
 
 ### No Authority Declared
 
@@ -111,9 +115,9 @@ Both controllers reach into the entire manager layer. `CheckoutController` calls
 
 `InventoryUserMgr` mixes stock management with user account concerns. Neither manager is contoured to a single domain; neither controller is contoured to a single workflow.
 
-**Contour**: undefined. Behavioral coherence was never applied. `OrderPaymentMgr` conflates order lifecycle with payment processing, behaviors that change for different reasons.
+**Contour**: undefined. `OrderPaymentMgr` conflates order lifecycle with payment processing, behaviors that change for different reasons.
 
-**Bond**: none. With no boundaries declared, the consequence of bypass is invisible. There is nothing to bypass and nothing to break until the system is large enough that the cost becomes unavoidable.
+**Bond**: none. There is nothing to bypass and nothing to break until the system is large enough that the cost becomes unavoidable.
 
 This is not inherently wrong for an early-stage system. The problem is not the monolith but that authority was never considered. When the system grows, there is nothing to grow from.
 
@@ -137,7 +141,7 @@ The team recognizes that `OrderPaymentMgr` and `InventoryUserMgr` are too broad 
 └──────────────────────────────────────────────────────┘
 ```
 
-Contour has improved on paper: there are named services with named responsibilities. Bond has improved in structure but not in practice. Each service has its own schema, which declares a boundary. But PaymentService queries the orders schema directly, and that bypass exists for any service that knows the connection string. Each such query embeds the schema's shape into the consumer's code, so a data model change requires simultaneous updates across every service that queries it. Separate schemas or database instances don't determine authority. The data access patterns do.
+Each service has its own schema, which declares a boundary. But PaymentService queries the orders schema directly, and that bypass exists for any service that knows the connection string. Each such query embeds the schema's shape into the consumer's code, so a data model change requires simultaneous updates across every service that queries it. Separate schemas or database instances don't determine authority. The data access patterns do.
 
 **Contour**: named but not coherent. PaymentService queries order data because order state and payment decisions are tightly coupled in practice, and the boundary didn't account for that.
 
@@ -196,7 +200,7 @@ When the migration completes, each domain exclusively owns its data and has mode
 
 An order's state can only change through the Order aggregate root: `Order.Accept()`, `Order.Fulfill()`, `Order.Cancel()`. The aggregate root enforces the invariants that govern those transitions. PaymentService cannot read the orders table. If it needs order data, it calls the Order context's service boundary. OrderService requests payment through PaymentService's contract.
 
-**Contour**: named and coherent. OrderService's decisions are the transitions above, with no "and also". Order lifecycle, payment processing, and inventory management each change for different reasons, and the boundaries reflect that behavioral coherence.
+**Contour**: named and coherent. OrderService's decisions are the transitions above, with no "and also". Deciding when an order needs payment is one of them, so PaymentService no longer reads order state and decides only how to take payment.
 
 **Bond**: strong, proportional to the consequence of bypass. State transitions through aggregate roots carry high consequence if violated, so the aggregate root enforces accordingly.
 
@@ -224,17 +228,15 @@ The contour is unchanged. OrderService still owns order lifecycle. The bond is w
 
 Later, the reporting team adds an `order_summary` materialized view over the `orders` table, then a nightly export job that selects from that view.
 
-The `orders` table has grown large enough that query performance on the checkout flow degrades under load. The team designs a migration: split `orders` into `orders` (header: customer, status, timestamps) and `order_line_items` (per-item: SKU, quantity, price). The migration cannot proceed. The `order_summary` view joins across columns that would be split into two tables, and the export job runs in a pipeline the reporting team controls on a separate release schedule. Coordinating all three changes across two teams and two release schedules stalls the migration for two quarters.
-
-The production schema cannot change freely because the reporting concern has an implicit claim on its shape. An expand-and-contract migration with a compatibility view could unblock it, but someone must own and retire that view, and owning it declares reporting as a consumer.
+The `orders` table has grown large enough that query performance on the checkout flow degrades under load. The team designs a migration: split `orders` into `orders` (header: customer, status, timestamps) and `order_line_items` (per-item: SKU, quantity, price). The migration cannot proceed. The `order_summary` view joins across columns that would be split into two tables, and the export job runs in a pipeline the reporting team controls on a separate release schedule. Coordinating all three changes stalls the migration for two quarters.
 
 **Bond**: violated. The aggregate root can no longer change the schema it's supposed to own without coordinating with a consumer that was never declared an authority over it.
 
-The bond wasn't broken in one decision; it eroded through a sequence of locally reasonable choices: a performance bypass, then a convenience view, then queries that took dependencies on both. The cost surfaced not at the point of access but at the point of change.
+The bond wasn't broken in one decision; it eroded through a sequence of locally reasonable choices: a performance bypass, then a convenience view, then queries that took dependencies on both. The cost surfaced not at the point of access but at the point of change. An expand-and-contract migration with a compatibility view could unblock the split, but someone must own and retire that view, and owning it declares reporting as a consumer.
 
 ### Reporting Access Through Contract
 
-The corrected version keeps the production schema exclusively in OrderService's authority.
+The corrected version declares that consumer from the start and keeps the production schema exclusively in OrderService's authority.
 
 ```text
 ┌──────────────────────────────────────────────────────┐
@@ -254,7 +256,7 @@ The corrected version keeps the production schema exclusively in OrderService's 
 
 OrderService publishes order data through a contract it controls, whether events, a scheduled export, or a dedicated read model, and ReportingService builds its own store from that contract. The `orders` split from the previous stage would change only OrderService's mapping into that contract, with no coordination across release schedules.
 
-The price is a reporting feed OrderService's team must build and version, and changes to what an order means still need coordination, through a contract OrderService owns. Bond need only match the consequence, so where `orders` rarely changes, a read replica with a declared schema contract and a named owner for downstream breakage can be bond enough.
+The price is a reporting feed that OrderService's team must build and version. Changes to what an order means still need coordination, but through a contract OrderService owns. Bond need only match the consequence. Where `orders` rarely changes, a read replica with a declared schema contract and a named owner for downstream breakage can be bond enough.
 
 **Contour**: coherent. OrderService owns order behavior and the production schema. ReportingService owns its read model.
 

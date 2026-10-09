@@ -34,11 +34,15 @@ When discovery changes understanding mid-interval, teams are forced to ship inco
 
 Different team types operate on different natural cadences. Feature teams might deliver every few days while platform teams deliver every few months, yet many organizations force synchronization through universal sprint cadences because cross-team planning needs shared boundaries. The Scaled Agile Framework makes this explicit, aligning every team's iteration start and end dates within a release train.
 
-Timeboxes also conflate three concerns that should be independent: development cycles, deployment cycles, and feedback cycles. Each operates at its own natural frequency, yet sprints tend to pull all three into alignment, stretching fast work to fill the interval and fragmenting slow work across multiple cycles. The Scrum Guide lets a team release an increment before the sprint ends, and it says the Sprint Review is never a release gate. But planning still happens at the boundary, and in practice feedback tends to batch at the review, where stakeholders inspect the work.
+Timeboxes also conflate three concerns that should be independent: development cycles, deployment cycles, and feedback cycles. Each operates at its own natural frequency, yet sprints tend to pull all three into alignment, stretching fast work to fill the interval and fragmenting slow work across multiple cycles.
+
+The Scrum Guide doesn't require this coupling. It lets a team release an increment before the sprint ends, and it says the Sprint Review is never a release gate. But planning still happens at the boundary, and in practice feedback tends to batch at the review, where stakeholders inspect the work.
 
 ### Ceremony Fuels Continuation Bias
 
-Scrum's ceremony structure fails this most visibly. Sprint Planning commits you to work. Daily Standups report progress. Sprint Review demonstrates what was built. The Retrospective redirects for next time. No ceremony routinely asks the question that matters mid-sprint: should we stop this work two days in because the assumptions were wrong? The Scrum Guide comes close. The Daily Scrum can adapt the sprint backlog, and the Product Owner can cancel a sprint whose goal has become obsolete. But adapting the backlog serves the sprint goal, and cancellation belongs to one role as an exception.
+Scrum's ceremony structure fails this most visibly. Sprint Planning commits you to work. Daily Standups report progress. Sprint Review demonstrates what was built. The Retrospective redirects for next time. No ceremony routinely asks the question that matters mid-sprint: should we stop this work two days in because the assumptions were wrong?
+
+The Scrum Guide comes close. The Daily Scrum can adapt the sprint backlog, and the Product Owner can cancel a sprint whose goal has become obsolete. But adapting the backlog serves the sprint goal, and cancellation belongs to one role as an exception. Neither is a routine check on whether a piece of work should stop.
 
 Without a ceremony that asks the question, many teams don't. They obfuscate and proceed because abandoning the sprint goal feels like failure, and the real failure gets deferred. A team that won't fail a design two days into a sprint is unlikely to throw away three sprints of committed work either. The sunk cost grows with every sprint, and each Sprint Planning recommits the team to it in front of stakeholders.
 
@@ -72,7 +76,7 @@ This allows different team types (feature teams, platform teams, shared services
 
 Before work begins, senior people shape the problem and solution space. Not detailed specifications, but boundaries.
 
-Appetite defines how much time this problem deserves, not how long it will take. Instead of estimating bottom-up ("this will take 6 weeks"), you set a top-down constraint: "this is worth 2 weeks, not more." The appetite becomes a creative constraint that forces the question: what can we solve within this time bound? If you cannot shape a viable solution within the appetite, the problem either needs a bigger appetite or should not be worked on yet.
+Appetite, Shape Up's term, defines how much time this problem deserves, not how long it will take. Instead of estimating bottom-up ("this will take 6 weeks"), you set a top-down constraint: "this is worth 2 weeks, not more." The appetite becomes a creative constraint that forces the question: what can we solve within this time bound? If you cannot shape a viable solution within the appetite, the problem either needs a bigger appetite or should not be worked on yet.
 
 Shaping answers these questions:
 - What problem are we solving, and what is the appetite?
@@ -91,7 +95,7 @@ The system maintains a hard separation between two artifacts. The Idea Archive i
 
 Shaping and betting can happen as often as business needs emerge. Priorities can change before developers pull the work, capturing the benefit of short planning cadences while preserving context about which assumptions need testing.
 
-Bets also give stakeholders the forecast a sprint used to give them. The appetite states what a feature is worth, and it doubles as a time budget. Add up the appetites queued ahead of a feature, run a few at a time under the WIP limit, and they give a start date that holds unless an earlier bet is extended or reshaped.
+Bets also give stakeholders the forecast a sprint used to give them. The appetite states what a feature is worth, and it doubles as a time budget. Each appetite is a ceiling. Add up the appetites queued ahead of a feature and divide by how many the WIP limit lets run at once, and the result is the latest that feature should start. That start date holds unless an earlier bet is extended or reshaped, or a new bet is placed ahead of it.
 
 ### 3. Circuit Breakers
 
@@ -99,13 +103,15 @@ Each feature has built-in boundaries, both temporal and assumption-based.
 
 Temporal boundaries are feature-specific time limits: a simple CRUD screen might have a 3-day limit, a complex workflow with integrations might have a 6-week limit, and a research spike might have a 2-week limit.
 
-A temporal boundary is still a time limit, but it differs from a sprint in what it controls. It belongs to one feature and is sized by that feature's appetite, and it exists to force a reassessment, not to decide what work happens. When it trips, there are no leftover days to fill, because the next shaped item is pulled when capacity opens.
+A temporal boundary is still a time limit, but it differs from a sprint in what it controls. It belongs to one feature and is sized by that feature's appetite, and it exists to force a reassessment, not to decide what work happens. When it trips, there are no leftover sprint days to fill, because the next shaped item is pulled when capacity opens.
 
 Assumption boundaries trigger when testing reveals the work is unviable. Critical assumptions defined during shaping get tested during implementation. If testing proves an assumption wrong and requires massive realignment, the circuit breaker trips and the work moves to Failed status for potential reshaping or Dropped status if unworkable.
 
 When either boundary is hit, anyone building the feature can declare the trip, and work stops at once. The people who placed the bet then decide what happens next: adjust scope, extend, reshape based on what you learned, or drop the work. Stopping never waits for a decision. Only restarting does. An extension is a new bet with a new appetite that competes with the rest of the queue, and it shows on the board, so a quiet slip becomes a visible decision.
 
-Per-feature boundaries also make failure localized. One feature can trip its circuit breaker while others continue flowing. In a uniform sprint, stopping mid-cycle puts the whole team's commitment in question, creating social pressure to keep going regardless of what you've learned. Here the stop condition was written down before work began, so stopping carries out the plan rather than abandoning it. The appetite said what the problem was worth. It never promised the team would finish within it, so tripping the breaker admits less than abandoning a sprint goal does. It still takes someone willing to declare it, which is why the failure section below treats tripping as a discipline.
+Per-feature boundaries also make failure localized. One feature can trip its circuit breaker while others continue flowing. In a uniform sprint, stopping mid-cycle puts the whole team's commitment in question, creating social pressure to keep going regardless of what you've learned.
+
+With a per-feature breaker, the stop condition was written down before work began, so stopping carries out the plan rather than abandoning it. The appetite said what the problem was worth. It never promised the team would finish within it, so tripping the breaker is a smaller admission than abandoning a sprint goal. It still takes someone willing to declare it, which is why the failure section below treats tripping as a discipline.
 
 ### 4. Kanban Flow
 
@@ -113,7 +119,9 @@ Work flows continuously. When capacity opens, pull the next shaped and bet-on fe
 
 Work items progress through clear states: Unshaped → Shaped → Accepted → Active → Completed, Failed, or Dropped. Progress tracking uses hill charts from Shape Up. Work is either uphill (still figuring it out) or downhill (executing on known work). This avoids the useless "80% done" claims that plague sprint burndowns.
 
-WIP limits and circuit breakers work together: WIP limits constrain how many features run simultaneously while circuit breakers bound how long any individual feature can run.
+A sprint boundary forces an inspection every few weeks. A six-week appetite has no such calendar checkpoint, by design. The assumption tests at the start and a hill chart stuck uphill do the job a sprint boundary was meant to do, and they raise the warning sooner.
+
+WIP limits and circuit breakers work together. WIP limits constrain how many features run simultaneously, while circuit breakers bound how long any individual feature can run.
 
 <blockquote class="pull-quote">
 <p>"Done" means the feature delivers the agreed value, period. Not "the sprint ended so we call it done."</p>
@@ -135,17 +143,17 @@ Technical debt framed as engineering work gets deprioritized. Framed as business
 
 **Multi-team coordination is hard. Shaped Kanban doesn't pretend otherwise.** Scale deserves an honest answer.
 
-Shape Up emerged from Basecamp's own product development, refined over years as the company grew from four people to about fifty. My own experience with Shaped Kanban at scale sits in that same range: three medium-sized teams working on the same broad system. I have also worked in organizations running Scaled Scrum. That is enough to project how the two approaches compare as teams multiply, though I won't claim confidence about enterprise-level deployments I haven't run.
+Shape Up emerged from Basecamp's own product development, refined over years as the company grew from four people to over fifty. My own experience with Shaped Kanban at scale sits in that same range: three medium-sized teams working on the same broad system. I have also worked in organizations running Scaled Scrum. That is enough to project how the two approaches compare as teams multiply, though I won't claim confidence about enterprise-level deployments I haven't run.
 
-The most significant dynamic at scale is continuation bias. I expect Scrum's greatest weakness to get worse as teams multiply because you cannot fix the collective without first empowering the individual. Scrum as commonly run operates on collective abstractions like sprint commitments, velocity charts, and planning poker. The Scrum Guide prescribes neither of the last two, but they usually come with it. None of these give individual contributors the tools to recognize when work should stop.
+The most significant dynamic at scale is continuation bias. I expect Scrum's greatest weakness to get worse as teams multiply. Scrum as commonly run operates on collective abstractions like sprint commitments, velocity charts, and planning poker (the last two aren't in the Scrum Guide, but they usually come with it). None of these give the people building a feature a pre-agreed trigger to stop it, and you cannot fix the collective without first empowering the individual.
 
 Shaped Kanban's core mechanisms work at the level of the individual feature. Its appetite and documented assumptions give the people building it an explicit, pre-agreed trigger to stop, without waiting for a team-wide ceremony or a collective decision. Leadership decides what happens after the stop, not whether it happens. That is the lever I would reach for to prevent bad assumptions from propagating across a multi-team program.
 
-Cross-team coordination in Scaled Scrum typically flows through the Scrum of Scrums meeting. But Scrum of Scrums is just another timeboxed event: it begins, it ends, and everyone returns to their sprint. It doesn't build an ongoing, async coordination discipline that is informed and purpose-driven. Scrum teams can write dependencies down too, but nothing in the sprint process requires it.
+Cross-team coordination in Scaled Scrum typically flows through the Scrum of Scrums meeting. But Scrum of Scrums is just another timeboxed event. It begins, it ends, and everyone returns to their sprint. It doesn't build an ongoing, async coordination discipline that is informed and purpose-driven. Scrum teams can write dependencies down too, but nothing in the sprint process requires it.
 
 In Shaped Kanban, dependencies are explicit from the shaping stage. When one team's circuit breaker trips, the shaped work already lists the downstream bets that depend on it, and those teams hear at once rather than at the next sync meeting. Each team understands how their work connects to the broader program and why, which makes async coordination practical because the context is already documented rather than locked inside a recurring meeting.
 
-Scrum's rigidity also tends to produce a common breakdown at scale: a small number of individuals, usually dev leads or architects, silently absorb all the cross-team coordination the process doesn't account for. They become the informal connective tissue holding the program together while everyone else follows the sprint. Shaped Kanban doesn't remove that load, since senior people still shape the work. It moves the load into shaping, where dependencies are written into the shaped work and visible to every team. They stop living in a few people's heads and inside ceremonies that can't actually handle them.
+Scrum's rigidity also tends to produce a common breakdown at scale: a small number of individuals, usually dev leads or architects, silently absorb all the cross-team coordination the process doesn't account for. They become the informal connective tissue holding the program together while everyone else follows the sprint. Shaped Kanban moves that load into shaping. Senior people still carry it, but the dependencies they find are written into the shaped work and visible to every team. They stop living in a few people's heads and inside ceremonies that can't actually handle them.
 
 The genuine challenge is visibility. Shaped Kanban at scale requires roadmaps that are explicit about dependencies between epics and features. You cannot hide behind sprint abstractions and hope the pieces fit together.
 
@@ -161,7 +169,7 @@ The genuine challenge is visibility. Shaped Kanban at scale requires roadmaps th
 <p><strong>Flexibility requires discipline.</strong> Without discipline, you have just removed the one forcing function that timeboxes provided while keeping all the dysfunction: poorly defined work, shifting priorities, and endless scope creep.</p>
 </div>
 
-Timeboxes enforce rhythm mechanically while Shaped Kanban requires you to enforce rhythm through actual alignment and genuine agreement. That is harder. It also fails more visibly when work runs long, because continuing past an appetite takes a new bet rather than a quiet carryover. The willingness to change comes first.
+Timeboxes enforce rhythm mechanically while Shaped Kanban requires you to enforce rhythm through actual alignment and genuine agreement. When that agreement slips, it fails more visibly, because continuing past an appetite takes a new bet rather than a quiet carryover. Enforcing rhythm through agreement is harder than letting a calendar do it, so the willingness to change comes first.
 
 ## When to Consider This Approach
 
@@ -176,6 +184,6 @@ Shaped Kanban requires these disciplines:
 - Build until done or until constraints force reassessment
 - Measure whether you delivered value, not just whether you shipped
 
-It is not a perfect solution. Continuous flow across teams demands more intentional coordination than synchronized sprints. But the tradeoff is explicit coordination work against synchronized sprints, and I will take that tradeoff every time. Explicit coordination makes dependencies intentional, while synchronized sprints leave them to hope until the next boundary.
+It is not a perfect solution. Continuous flow across teams demands more intentional coordination than synchronized sprints. But I will take that tradeoff every time. Explicit coordination makes dependencies intentional, while synchronized sprints leave them to hope until the next boundary.
 
 Rhythm and tempo come from alignment and natural feature boundaries, not predetermined calendars. You cannot iterate toward value without agreement on what constitutes value. Shaped Kanban makes that agreement explicit, visible, and continuous, without requiring everyone to march to the same drumbeat.

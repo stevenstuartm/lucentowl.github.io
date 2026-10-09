@@ -143,15 +143,15 @@ Put the check in the export service from the start, and keep plan details out of
 
 For a one-time change it can make alone, the platform team's queue is short, and sometimes that's what a missed deadline or an incident needs. Suppose a Friday release breaks the export service's limit check, and free customers start pulling millions of rows through the public API. The platform team can ship the four-step policy within the hour, changed to refuse any export without a declared row count, long before the export team can safely deploy a fix. Ship it, but ship it as debt:
 
-- **The export team owns the fix and the emergency contract change,** booked into a release the day the policy ships. Once the incident ends, nothing pushes anyone to replace a policy that seems to work.
+- **The export team owns the fix and the contract change the policy imposed,** booked into a release the day the policy ships. Once the incident ends, nothing pushes anyone to replace a policy that seems to work.
 - **The policy carries its owner, ticket, and removal date,** so anyone reading the gateway can tell a stopgap from a rule that belongs there.
 - **The fix isn't done until the policy is deleted** and the service's own test covers the routes the stopgap never saw.
 
 ### Make Code in the Gateway Require an Owner
 
-A business rule gets into the gateway whenever the platform team approves the policy, and that review tends to ask whether the policy works, not whose rule it is. A policy needs cross-team review if it calls another service, runs custom code, or compares a claim to a business value. A pipeline can detect the first two. The review comes from the domain team that owns the concept, or from architecture review when no team clearly owns it.
+A business rule needs only the platform team's approval to get into the gateway, and that review tends to ask whether the policy works, not whose rule it is. A policy needs cross-team review if it calls another service, runs custom code, or compares a claim to a business value. A pipeline can detect the first two. The review comes from the domain team that owns the concept, or from architecture review when no team clearly owns it.
 
-Two cases fall back on a stopgap's terms. If the owning team can't review before an emergency ships, the review joins the stopgap's debt. If the policy fails the ownership test, it merges only with a stopgap's owner, ticket, and removal date.
+Two cases fall back on a stopgap's terms. If the owning team can't review before an emergency ships, the review joins the stopgap's debt. If the policy fails the ownership test, it merges only on a stopgap's or an adapter's terms.
 
 ### Split Authorization by Who Owns the Facts
 

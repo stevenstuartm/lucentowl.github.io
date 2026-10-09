@@ -18,16 +18,16 @@ sources:
 
 Most architects have sat in a meeting where leadership demands faster delivery. "Our competitors ship features weekly!" "We need to be first to market!" "We'll fix the technical issues later!" What gets decided under that pressure tends to outlive everyone who was in the room.
 
-The premise driving that meeting is weaker than it sounds. Golder and Tellis studied roughly 500 brands across 50 product categories. Pioneers failed 47% of the time, against 8% for the early market leaders who followed them, and surviving pioneers held about 10% market share against 28%. That undercuts the "first to market" demand, and the assumption behind it that arriving first is what wins. It says less about engineering discipline. Those leaders entered an average of thirteen years later, so the study is more about patience.
+The premise driving that meeting is weaker than it sounds. Golder and Tellis studied roughly 500 brands across 50 product categories and found that pioneers failed 47% of the time. Surviving pioneers held about 10% market share, against 28% for the early market leaders who followed them. Those leaders were chosen in hindsight, so that comparison flatters them, but the pioneer numbers alone weaken the assumption that arriving first is what wins. The leaders also entered an average of thirteen years later, so the study argues for patience more than for any engineering practice.
 
-Shipping weekly is a separate demand, and it's compatible with the argument here. It only needs the expensive decisions under each weekly increment to be designed first or to ship in reversible steps.
+Shipping weekly is a separate demand, and it's compatible with designing first. It only needs the expensive decisions under each weekly increment to be designed first or to ship in reversible steps.
 
 ## Architectural Costs Arrive Late and Get Blamed on Something Else
 
 When an architect spends a day designing a system properly, they're making decisions that echo through years of development. How will this scale? Where does it break? How will we test this? What happens when requirements change? How will new developers understand this?
 
 <blockquote class="pull-quote">
-<p>These costs are delayed and distributed. When a system fails six months later, people rarely connect it to architectural shortcuts taken under pressure.</p>
+<p>The costs of skipping those questions are delayed and distributed. When a system fails six months later, people rarely connect it to architectural shortcuts taken under pressure.</p>
 </blockquote>
 
 The misattribution is the expensive part. Customer churn that rises gradually can read as a sales or marketing problem. When engineering productivity drops because every change breaks something else, it tends to be blamed on "poor performers" rather than on the architecture that makes every change risky. The cause sits months back and shows up as many small symptoms. An incident review usually stops at the change that broke production, not the design that made the change risky.
@@ -41,7 +41,8 @@ Engineering organizations can become fire departments, racing from incident to i
 Balance isn't 50/50. It's spending design time in proportion to how expensive a decision is to reverse.
 
 Data models, service boundaries, and security models are expensive, because a mistake in any of them propagates into everything built on top and can only be undone by touching all of it. UI layouts, feature flags, and configuration are cheap, so shipping them is the fastest way to find out whether they're right.
-The test is not how important a decision feels. It's what undoing it would cost six months from now. The table assumes the answer is knowable, meaning the team has built this kind of system before, has seen the access patterns, and knows who the consumers are.
+
+The test is not how important a decision feels. It's what undoing it would cost six months from now. The table below assumes the answer is knowable, meaning the team has built this kind of system before, has seen the access patterns, and knows who the consumers are.
 
 | Decision | What reversing it costs | Design investment, when the answer is knowable |
 | --- | --- | --- |
@@ -53,9 +54,11 @@ The test is not how important a decision feels. It's what undoing it would cost 
 | UI layout | Redeploy | Ship and measure |
 | Feature flags / config | Change a value | Ship and measure |
 
-The days produce something checkable, such as a reviewed data model, a rehearsed migration path, or contract tests for a boundary. When the answer isn't knowable, the same days go into making the decision cheap to move instead.
+Those design days produce something checkable, such as a reviewed data model, a rehearsed migration path, or contract tests for a boundary. When the answer isn't knowable, the same days go into making the decision cheap to move instead, such as starting with a module boundary rather than a service split.
 
-Two refinements apply. Expand-and-contract migrations, which add the new shape before removing the old one, already make additive schema changes cheap. The days belong to the changes they don't cover, like splitting an entity or changing its keys. Reversal cost also isn't the only axis. A config change is cheap to undo but can do damage before anyone undoes it, which calls for a staged rollout rather than design days.
+Expand-and-contract migrations, which add the new shape before removing the old one, already make additive schema changes cheap. The design days belong to the changes those migrations don't cover, like splitting an entity or changing its keys.
+
+Reversal cost also isn't the only axis. A config change is cheap to undo but can do damage before anyone undoes it, which calls for a staged rollout rather than design days.
 
 ## Where Building Deliberately Is the Wrong Call, and the Mistake Teams Actually Make
 
@@ -69,19 +72,19 @@ The reversal-cost test cuts both ways, too. A service boundary is expensive to m
 
 ### The Actual Mistake Is Misclassifying Reversibility
 
-So the honest version of the claim is narrower than "build deliberately." It is that teams under delivery pressure tend to misclassify which decisions are reversible. Research has measured where the resulting debt lands. Neil Ernst and colleagues at Carnegie Mellon's Software Engineering Institute surveyed 1,831 engineers and architects in 2015, and architectural decisions came out as the most important source of technical debt.
+So the honest version of the claim is narrower than "build deliberately." It is that teams under delivery pressure tend to misclassify which decisions are reversible. Practitioner research shows where that kind of debt lands. Neil Ernst and colleagues at Carnegie Mellon's Software Engineering Institute surveyed 1,831 engineers and architects in 2015, and respondents ranked architectural decisions as the most important source of technical debt.
 
-Which way teams misclassify is an argument from incentives rather than a measurement. Teams with time can err the other way and over-build. Pressure pushes the error toward underpricing, because pressure rewards what is visible this sprint. The code change is visible, and the migration isn't until it lands. So schema and boundary decisions get treated as cheap because changing the code is cheap, and the migration rarely gets priced.
+That teams underprice rather than overprice is an argument from incentives, not a measurement. Pressure rewards what is visible this sprint. The code change is visible, and the migration isn't until it lands. So schema and boundary decisions get treated as cheap because changing the code is cheap, and the migration rarely gets priced. Teams with time can make the opposite error and over-build.
 
-A hasty split into services under pressure looks like over-building, but it's the same error. The split was priced by the code it took to write, not by what merging the services back would take.
+A hasty split into services under pressure looks like that over-building, but it's the underpricing error again. The split was priced by the code it took to write, not by what merging the services back would take.
 
 ## AI Multiplies Whatever Discipline You Already Have
 
 AI code generation hasn't changed which decisions are expensive to reverse. It has lowered the cost of writing code, which is the cost teams already mistake for reversal cost. A new service or a reshaped schema that takes an afternoon to generate feels cheap to change. But the live data, the consumers, and the contracts built on top of it cost as much to migrate as they did before.
 
-That makes AI a force multiplier for existing culture. This is an inference from the cost argument, not a finding. Disciplined teams use it to implement well-designed foundations faster. Undisciplined teams use it to stack more code on unexamined foundations, and every generated feature is one more thing a later migration has to move. The output counts as progress while the debt it adds stays invisible, which is an illusion of productivity.
+That makes AI a force multiplier for existing culture, by inference from the cost argument rather than from a finding. Disciplined teams use it to implement well-designed foundations faster. Undisciplined teams use it to stack more code on unexamined foundations, and every generated feature is one more thing a later migration has to move. The output counts as progress while the debt it adds stays invisible, which is an illusion of productivity.
 
-Google's DORA 2024 Accelerate State of DevOps report fits that gap without proving it. It found AI adoption associated with higher individual productivity and with lower software delivery stability and throughput. It measured a correlation, though, and pointed to larger batch sizes as the likely cause, not foundations. AI doesn't create the problem, but more code per week on the same foundations means the migration bill grows faster.
+Google's DORA 2024 Accelerate State of DevOps report is consistent with that gap. It found AI adoption associated with higher individual productivity and with lower software delivery stability and throughput. The report measured a correlation and pointed to larger batch sizes as the likely cause, not foundations. AI doesn't create the problem, but more code per week on the same foundations means the migration bill grows faster.
 
 ## Translate Architecture Into Revenue, Retention, and Cost
 
@@ -93,9 +96,9 @@ Pricing decisions correctly only helps if the people holding the budget accept t
 | "These shortcuts are risky" | "Reliability is our #2 reason for churn, and this adds to it" |
 | "The architecture is a mess" | "Our seniors spend most of their time on debt. Three months of remediation avoids the backfill hiring" |
 | "We have technical debt" | "Reliability concerns are blocking $2M in enterprise deals" |
-| "Our stack is outdated" | "Competitors ship faster because they built these foundations two years ago" |
+| "Our stack is outdated" | "Changes that touch the old stack take twice as long as changes that don't" |
 
-The numbers can come from data the team already has, such as cycle time on changes that touch the troubled module against changes that don't, or the incidents traced to it. Changes to core modules also tend to be harder work, so a forecast should claim only part of that measured gap. Multiply that part by the share of the roadmap that touches the module. Stated as a range, it gives leadership a number they can check later.
+The numbers can come from data the team already has, such as cycle time on changes that touch the troubled module against changes that don't, or the incidents traced to it. Changes to core modules also tend to be harder work, so a forecast should claim only part of that measured gap. Multiply the claimed part by the share of the roadmap that touches the module. Stated as a range, the result gives leadership a number they can check later.
 
 Most technical decisions can be framed as a business outcome like revenue, retention, cost savings, market position, or risk reduction. Doing it well requires understanding the business as deeply as the technology, and that is a separate skill from technical depth.
 
@@ -109,7 +112,12 @@ If you can't state the risk of not doing it, even as "unknown, and this caps it,
 
 ### Leaders: Reward Prevented Incidents, Not Heroic Saves
 
-What you measure and reward is what you get. Prevention is invisible by design, so an organization that only sees saves ends up promoting the people who fight the fires its shortcuts started. Prevention can be made visible by comparing a module's incidents per change before and after it got design investment. Celebrate teams that prevent incidents through design, not just heroic firefighting. Promote engineers who ensure long-term maintainability. Measure velocity over quarters, not just sprints. Make technical debt visible alongside revenue metrics.
+What you measure and reward is what you get. Prevention is invisible by design, so an organization that only sees saves ends up promoting the people who fight the fires its shortcuts started. Prevention can be made visible by comparing a module's incidents per change before and after it got design investment, against a similar module that got none. The same visibility changes what the organization rewards:
+
+- Celebrate teams that prevent incidents through design, not just heroic firefighting
+- Promote engineers who ensure long-term maintainability
+- Measure velocity over quarters, not just sprints
+- Make technical debt visible alongside revenue metrics
 
 ### Teams: Validate Assumptions Before Production Does
 

@@ -24,9 +24,9 @@ By leadership I mean other people choosing to follow your judgment. Here are the
 
 ## 1. Do You Accumulate Experience or Repeat It?
 
-There's a difference between ten years of experience and one year of experience repeated ten times. Repeating experience means doing the same work year after year, measuring tenure rather than growth. You solve the same class of problem at the same difficulty, year after year. The work feels comfortable because you've solved these problems before.
+There's a difference between ten years of experience and one year of experience repeated ten times. Repeating experience means measuring tenure rather than growth. You solve the same class of problem at the same difficulty, year after year. The work feels comfortable because you've solved these problems before.
 
-Accumulating experience means building new capabilities, taking on broader responsibilities, and establishing feedback loops for yourself and your team. You master a domain, then take on harder problems in it or stretch into adjacent ones. Going deeper counts as much as going wider, as long as the problems keep getting harder. Harder problems bring discomfort, and it signals learning when you can say how the problem is harder than last year's.
+Accumulating experience means building new capabilities, taking on broader responsibilities, and establishing feedback loops for yourself and your team. You master a domain, then take on harder problems in it or stretch into adjacent ones. Going deeper counts as much as going wider, as long as the problems keep getting harder. Harder problems bring discomfort. Discomfort alone isn't learning. It counts when you can say how this problem is harder than last year's.
 
 Leaders accumulate in two directions, for themselves and for others. They create opportunities for others while advancing their own skills. Even when deeply focused on technical work, they enable team growth by making their knowledge accessible, their decisions transparent, and their expertise transferable. One way is to write down why a decision went the way it did, where the team can find it.
 
@@ -50,33 +50,39 @@ This shows up in reviews, design discussions, and retrospectives. Instead of def
 
 Do you ask "What am I not seeing?" or "Do you see any issues?" One question invites discovery; the other invites validation.
 
-The wording only helps if your preparation backs it. Handing the reviewer the assumptions you're least sure of tests the design where you already suspect it's weak.
+Asking the open question only helps if you also tell the reviewer where you're unsure. Handing them the assumptions you're least sure of tests the design where you already suspect it's weak.
 
 Reaching the gaps you don't suspect takes other people's doubts, and Gary Klein's premortem is built for that. Everyone on the team assumes the project has already failed and writes down why, so the list includes causes you never thought of.
 
 ## 4. Does Quality Approve Your Work, or Does Approval Define Quality?
 
-Just because no one flagged your code in review doesn't mean it's quality work. The previous question was about code aging after it ships. This one is about who holds the standard at the moment of approval.
+Just because no one flagged your code in review doesn't mean it's quality work. The second question was about code aging after it ships. This one is about who holds the standard at the moment of approval.
 
-**Leaders maintain standards independent of external validation.** They critique their own work and seek improvement opportunities. The approval process exists to catch mistakes, not to define quality. A reviewer sees a diff for a few minutes, with whatever context the description gives them. The author knows what was skipped, what was assumed, and which edge cases went untested. If the only reason your code is good is that reviewers didn't reject it, you're outsourcing accountability to the person who knows least about what this change left out.
+**Leaders maintain standards independent of external validation.** They critique their own work and seek improvement opportunities. The approval process exists to catch mistakes, not to define quality. A reviewer sees a diff for a few minutes, with whatever context the description gives them. The author knows what was skipped, what was assumed, and which edge cases went untested. If the only reason your code is good is that reviewers didn't reject it, you're outsourcing accountability to the person who knows least about what you knowingly left out. The reviewer's fresh eyes are for the gaps you didn't know were there.
 
 ## 5. Do You Build Others While You Build Systems?
 
-The most effective technical leaders understand something fundamental: we learn by teaching. When you mentor less experienced developers, you're not just being generous with your time. Explaining a design from memory forces you to recall and organize what you know, and it exposes the parts you only thought you understood.
+The most effective technical leaders understand that we learn by teaching. When you mentor less experienced developers, you're not just being generous with your time. Explaining a design from memory forces you to recall and organize what you know, and it exposes the parts you only thought you understood.
 
-Logan Fiorella and Richard Mayer tested this in 2013. Students who taught a lesson by recording a video lecture outperformed students who had only prepared to teach it, on a comprehension test a week later. In 2018, Koh, Lee, and Lim traced the gain to retrieval. Students who lectured without notes gained as much as students who simply took a recall test. Students who read a prepared script aloud gained nothing. Both studies tested students on a single lesson, so they support the mechanism, not any particular size of payoff for an engineer. The practical version is to explain the design from memory rather than walking someone through the diff.
+Logan Fiorella and Richard Mayer tested this in 2013. Students who taught a lesson by recording a video lecture outperformed students who had only prepared to teach it, on a comprehension test a week later.
 
-This can compound. As junior developers learn to handle the work you do today, you create space to tackle the challenges your leaders face. As they grow, you grow. You're not delegating to save time; you're building organizational capability while advancing your own.
+In 2018, Koh, Lee, and Lim traced the gain to retrieval. Students who lectured without notes gained as much as students who simply took a recall test. Students who read a prepared script aloud did no better than students who restudied the lesson. Both studies tested students on a single lesson, so they support the mechanism, not any particular size of payoff for an engineer.
 
-The return isn't immediate. Teaching slows you down for weeks before it frees anything up, and the space only opens if the people you taught take on the work you used to do. Even then, the freed space doesn't claim itself. Ask for the harder work explicitly, or it fills with more of the same.
+The practical version is to explain the design from memory rather than walking someone through the diff. Writing the design down from memory would earn the same gain. Teaching a person earns more, because the person keeps what they learned.
 
-Great engineers solve hard problems. Great leaders create engineers who solve hard problems. One scales with your own hours. The other scales with the hours of everyone you've taught, because what they learned keeps working after your mentoring time ends, as long as they stay on the team and on work that uses it. Mentorship isn't a nice-to-have activity you do when you have spare cycles; it's a core responsibility that determines whether you're writing code or building systems, working alone or multiplying impact.
+As junior developers learn to handle the work you do today, you create space to tackle the challenges your leaders face. As they grow, you grow. You're not delegating to save time; you're building organizational capability while advancing your own.
 
-## Five Questions to Ask About Your Own Work
+Great engineers solve hard problems. Great leaders create engineers who solve hard problems. One scales with your own hours. The other scales with the hours of everyone you've taught, because what they learned keeps working after your mentoring time ends. Mentorship isn't a nice-to-have activity you do when you have spare cycles; it's a core responsibility that determines whether you're writing code or building systems, working alone or multiplying impact.
+
+The return isn't immediate. Teaching slows you down for weeks before it frees anything up, and the space only opens if the people you taught stay on the team and take on the work you used to do. Even then, the freed space doesn't claim itself. Ask for the harder work explicitly, or it fills with more of the same.
+
+## Habits Become Leadership When You Share Them
 
 Each habit gives people a reason to follow your judgment. The engineer who keeps taking on harder problems becomes the one others bring the hard version of a problem to. A standard you can state and tie to a cost is one the team can adopt. Questions that surface problems early get you invited into design discussions sooner. The people you taught come back with their next hard problem.
 
 Those reasons aren't enough on their own. A standard imposed in review reads as gatekeeping, and a hard problem solved alone teaches no one. They turn into leadership when you share them, offering the standard along with its cost and solving the hard problem where others can follow the reasoning. The skilled engineer people route around usually has the habits and skips this step, delivering standards as verdicts on other people's work.
+
+## Five Questions to Ask About Your Own Work
 
 Each pattern reduces to a question you can put to your own work:
 
@@ -86,7 +92,9 @@ Each pattern reduces to a question you can put to your own work:
 - When I hold a standard the reviewer didn't, have I stated its cost so the team can adopt it?
 - Who on the team can now do something they couldn't before I worked with them?
 
-A title doesn't grant these habits, but the hours some of them need come from whoever owns the schedule. Mentoring and revisiting shipped code take time a deadline wants. A standard stated with its cost, like the pricing-rules example, is how you earn those hours. Handing a reviewer your least-sure assumptions needs no hours at all.
+## What a Title Still Provides
+
+A title doesn't grant these habits, but the hours some of them need come from whoever owns the schedule. Mentoring and revisiting shipped code take time a deadline wants. A standard stated with its cost, like the module that will be hard to change when the pricing rules move, is how you earn the hours to revisit code. Mentoring earns its hours the same way, stated as weeks slower now in exchange for someone else owning that work later. Handing a reviewer your least-sure assumptions needs no hours at all.
 
 A title also brings a seat in the rooms where designs get set. The habits don't replace that seat, but they're how people without one get invited, because the engineer whose questions surface problems early is the one someone asks to the next design review.
 

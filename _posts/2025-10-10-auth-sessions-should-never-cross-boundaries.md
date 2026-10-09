@@ -26,9 +26,11 @@ It is tempting to treat user authentication sessions as ambient context. You pas
 <p>This conflates authentication with context. You're treating an external trust artifact as internal state.</p>
 </blockquote>
 
-The result is coupling, a dependency on the auth server at every hop, and systems that break in asynchronous scenarios, event-driven architectures, and integration patterns.
+The result is internal services coupled to the external auth mechanism, a replayable credential spread across them, and systems that break when work runs after the session ends or without one.
 
 ## Sessions Validate at Boundaries, Context Flows Internally
+
+### What Crosses the Boundary
 
 "Session" here means whatever the client presents to prove who the user is, whether that's a cookie bound to a server-side session or a bearer access token such as a JWT. The arguments below apply to both, and where they differ, the post says which one it means.
 
@@ -38,21 +40,29 @@ A user session arrives at the boundary: an API endpoint, gateway, or edge functi
 
 The granted scopes in that context matter. A third-party app that holds only read access to a user's orders must not gain everything the user can do once its token is converted at the edge. So downstream authorization allows an action only when the user's current permissions and the client's granted scopes both permit it.
 
-Passing context explicitly doesn't mean leaving it unprotected. A downstream service can't accept a bare user_id from anyone who sends one, or any caller could claim to be any user. The context has to arrive in a form the receiver can trust, which means a small object the boundary signs. An authenticated service-to-service channel isn't enough on its own. It proves which service is calling but not which user that service is acting for, so a compromised caller could assert any user_id it liked. Netflix describes this design in its "Edge Authentication and Token-Agnostic Identity Propagation" post. Its edge services validate the many token types clients present and mint an integrity-protected identity object, called a Passport, which is what downstream services receive.
+### The Boundary Signs the Context
 
-A signed context object is still a credential, so it needs the limits the post asks of tokens:
+Passing context explicitly doesn't mean leaving it unprotected. A downstream service can't accept a bare user_id from anyone who sends one, or any caller could claim to be any user. The context has to arrive in a form the receiver can trust, which means a small object the boundary signs. An authenticated service-to-service channel isn't enough on its own. It proves which service is calling but not which user that service is acting for, so a compromised caller could assert any user_id it liked.
+
+Netflix describes this design in its "Edge Authentication and Token-Agnostic Identity Propagation" post. Its edge services validate the many token types clients present and mint an integrity-protected identity object, called a Passport, which is what downstream services receive.
+
+A signed context object is still a credential, so it needs limits of its own:
 
 1. It's issued and accepted only inside your trust domain, never by an external API.
 2. It's bound to one request or one message rather than to the user's login, through a short expiry, an audience claim that limits it to your internal services, and a request or message id.
 3. It carries only the fields the work needs.
 
-Only the boundary holds the signing key, so a compromised internal service can read the context it was given but can't mint one for a different user. Like Netflix's Passport, the same context is passed along the whole call chain rather than re-signed at each hop, so no hop has to call a signing service mid-request.
+The boundary signs with a private key that only it holds, so a compromised internal service can read the context it was given but can't mint one for a different user. Like Netflix's Passport, the same context is passed along the whole call chain rather than re-signed at each hop, so no hop has to call a signing service mid-request.
 
 The context can still be replayed inside your system. Within its short validity window, a service in the call path could replay it to another internal service, which is the same exposure a forwarded token has. What's gone is the external replay. No API outside your system accepts it, and it doesn't outlive the request.
 
-The first two limits are the line the title draws. Whatever travels inward is issued inside your trust domain and bound to one request or message. A gateway that exchanges the user's token for an internally issued, internally audienced one, using OAuth 2.0 Token Exchange (RFC 8693), meets that line. Forwarding the token the client presented does not.
+### Token Exchange Meets the Line, Forwarding Doesn't
 
-A third design, per-hop delegation from the external identity provider, has each service trade for a new token audienced to the next one. It answers the replay concern but still crosses the line. Every hop then calls the provider at runtime and parses its token format, while a boundary-signed context is verified locally with a key you own.
+This post draws its line at the first two limits above. Whatever travels inward is issued inside your trust domain and bound to one request or message. A gateway that exchanges the user's token for an internally issued, internally audienced one, using OAuth 2.0 Token Exchange (RFC 8693), meets that line. Forwarding the token the client presented does not.
+
+Another alternative, per-hop delegation from the external identity provider, has each service trade for a new token audienced to the next one. It answers the replay concern but still crosses the line. Every hop then calls the provider at runtime and parses its token format, while a boundary-signed context is verified locally with a key you own.
+
+Meeting that line at the gateway doesn't have to be heavy. For a system with two or three services and one issuer, the gateway signing a short-lived internal token with a standard JWT library keeps its cost to one key to manage.
 
 ## Why Sessions Don't Belong in Internal Flows
 
@@ -62,13 +72,9 @@ A third design, per-hop delegation from the external identity provider, has each
 
 **Coupling to external authentication.** When internal components accept user sessions, they become coupled to the token format, the issuer's validation requirements, token refresh logic, and external auth provider availability. With one standard OIDC issuer and a shared validation library, switching issuers can be mostly configuration. The coupling shows when the estate isn't that tidy, with several client token types, a proprietary session format, or a migration between them. Then every component that parses sessions has to change with it. Netflix's Passport work was a response to exactly that variety. A boundary-signed context still needs a shared format and key distribution, but that format is yours and doesn't change when the external issuer does.
 
-**Forwarding only on synchronous calls keeps the external token inside.** The strongest version of the opposing view forwards a short-lived, audience-restricted token down synchronous call chains and uses explicit context only for async work. Its async half is this post's design. Its sync half still carries the external artifact, so it keeps the coupling above. Widening the token's audience to cover the internal services, which RFC 9700 permits for a small set of resource servers, brings back the replay exposure described under the privilege-escalation objection below.
-
-The boundary pattern doesn't have to be heavy, either. For a system with two or three services and one issuer, the gateway signing a short-lived internal token with a standard JWT library keeps its cost to one key to manage.
-
 ## Session Propagation Breaks When Work Outlives the Request
 
-Propagating user sessions through internal components creates predictable failures whenever work outlives the request or has no user behind it. These failures are aimed at forwarding tokens into async work. The synchronous-only variant is answered above.
+Propagating user sessions through internal components creates predictable failures whenever work outlives the request or has no user behind it.
 
 **Session expiration mid-flow** is the first to appear. Event processors run minutes later and the session has expired. Background jobs run hours later and the session is gone. Async processors retry and the session is invalid. You build workarounds: token refresh in queues, session persistence in metadata, special "system sessions" for background work.
 
@@ -78,13 +84,15 @@ Propagating user sessions through internal components creates predictable failur
 
 Storing context as data, which the boundary pattern makes the default, removes all three. The service that owns a workflow stores the original context with the workflow's own record, as data about who started it. Each later step or retry works from that record rather than from a credential that expires. When a later step calls another service, the workflow service calls as itself and passes the initiating user_id as data. The receiver checks that this service is allowed to request this action for this tenant, then checks the user's current permissions. A scheduled job or a webhook handler works the same way, with its own service identity and no user at all.
 
-Pair the pattern with one rule. Every step authorizes against the user's current permissions and account status when it runs, so a user whose access was removed, or whose session was revoked after a compromise, is refused even hours later. The rule is independent of the token question, and a design that forwards tokens could adopt it too.
-
-With this pattern, the rule is required. The context carries identity and the client's scope ceiling, not the user's roles, so a step has to look up permissions to decide anything. That lookup reads your own permission data, which the service already depends on to do the work, rather than making the external auth server a condition of every hop.
+Pair the pattern with one rule. Every step authorizes against the user's current permissions and account status when it runs, so a user whose access was removed, or whose session was revoked after a compromise, is refused even hours later. The rule is independent of the token question, and a design that forwards tokens could adopt it too, but this pattern can't work without it. The context carries identity and the client's scope ceiling, not the user's roles, so a step has to look up permissions to decide anything. That lookup reads your own permission data, which the service already depends on to do the work, rather than making the external auth server a condition of every hop.
 
 Async work has a limit here. Nothing in this path ties the user_id to a workflow that user started. A compromised workflow service can therefore act for any user in the tenants it serves, through the operations its own service identity is allowed. That is the same trust any background job carries, and it's why each service's identity should be allowed only the operations that service performs.
 
 ## Common Objections
+
+### "We Can Forward Tokens on Synchronous Calls Only"
+
+The strongest version of this view forwards a short-lived, audience-restricted token down synchronous call chains and uses explicit context only for async work. That view's async half is this post's design. Its sync half still carries the external artifact, so it keeps the coupling to the issuer's format described earlier. Widening the token's audience to cover the internal services, which RFC 9700 permits for a small set of resource servers, keeps the external replay out. It still leaves a credential in the issuer's format that lasts the token's whole lifetime rather than one request.
 
 ### "We Lose User Context for Auditing"
 
@@ -100,7 +108,7 @@ Compliance rules ask you to authenticate who is acting and to record what they d
 
 ### "Service Roles Create Privilege Escalation Risks"
 
-The risk is that a service with broad credentials can be tricked or compromised into acting outside the current user's rights. Forwarding the user's token limits that risk only for calls to other services. On the request path, a boundary-signed context protects those calls equally, since a compromised service can't mint context for another user. Async steps rest on the calling service's own identity, with the async limit described earlier.
+The risk is that a service with broad credentials can be tricked or compromised into acting outside the current user's rights. A forwarded token limits that risk only on calls to other services. On those calls, within one request, a boundary-signed context limits it just as well, since a compromised service can't mint context for another user. Async steps rely on the calling service's own identity, with the limit described earlier.
 
 For the service's own resources, the token changes nothing. A compromised service with a database connection that reads every tenant's rows can read them whether or not it holds a user token, unless the database itself enforces the user's identity.
 
@@ -114,7 +122,7 @@ Service roles also make the split clearer. The service has technical capability 
 
 Zero trust doesn't ask for the user's original token at every hop. NIST SP 800-207 requires that authentication and authorization are enforced before every access to a resource, rather than inherited from network location or an earlier step. A downstream service that verifies its caller's service identity and the signature on the user context, then authorizes the action against that context, meets the requirement. Forwarding the session meets it no better and spreads a replayable credential.
 
-The legitimate exception is a component that must call another system as the user, such as a third-party API that only accepts the user's delegated token. Even then the original session doesn't travel. OAuth 2.0 Token Exchange (RFC 8693) lets the component trade for a new token issued for that one audience, scoped to that call.
+The legitimate exception is a component that must call another system as the user, such as a third-party API that only accepts the user's delegated token. Even then the original session doesn't travel. The boundary, the one place that holds the user's token, uses OAuth 2.0 Token Exchange (RFC 8693) to trade it for a new token issued for that one audience and scoped to that call. Work that calls the third party hours later relies on a grant the owning service stores as data, the way a workflow stores its context, not on a token carried through queues.
 
 ### "We Need Sessions for Distributed Tracing"
 
@@ -136,7 +144,7 @@ The same principles apply: modules accept explicit context and perform explicit 
 
 User authentication sessions serve one purpose: validating identity at a security boundary. Once validated, the session has done its job.
 
-At the boundary:
+In practice:
 - Validate the session once, and let no component behind it parse the token
 - Extract only the context the work needs, such as user_id, tenant_id, correlation_id, and the calling client's granted scopes
 - Sign that context at the boundary, bind it to one request or message, and send it over authenticated service calls

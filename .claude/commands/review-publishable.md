@@ -11,7 +11,7 @@ Review publishable content against the site's highest quality standards before i
 | Mode | What it adds | Stops when |
 | --- | --- | --- |
 | `iterate` | Repeats the full review, each round in a fresh subagent that has never seen the post | A round needs no updates, or three rounds have run |
-| `convince-me` | After the review, fresh skeptic subagents read the post and say whether it convinced them. The orchestrator revises after each one | A skeptic is convinced and a fresh reader can still follow the post |
+| `convince-me` | After the review, fresh skeptic subagents judge whether the argument is sound for a blog post, with at most three objections each. The orchestrator revises after each one | A skeptic recommends the post with no blocking objection, and a fresh reader can still follow it |
 | both | `iterate` runs to completion first, then `convince-me` | Both conditions are met |
 
 ---
@@ -374,40 +374,47 @@ Each round of `iterate` is a complete review (Steps 1-12, resolution pass includ
 
 ## Mode: `convince-me`
 
-`convince-me` tests whether the argument persuades a skeptical reader who has only the page. The review steps make a post correct and clear. They don't establish that it convinces anyone. Run it after the review (or after `iterate` when both are given). You are the orchestrator. Skeptics read and judge, and only you edit.
+`convince-me` tests whether the argument holds up for a skeptical reader who has only the page. The review steps make a post correct and clear. They don't establish that the argument is sound. Run it after the review (or after `iterate` when both are given). You are the orchestrator. Skeptics read and judge, and only you edit.
+
+**The bar is a blog post, not a dissertation.** A post is an argued position from a practitioner. It owes the reader sound reasoning, a mechanism for each claim, honest limits, and no errors. It doesn't owe prevalence data, incident reports, numeric thresholds, or a controlled comparison. The author's stated experience counts as experience, and a mechanism counts as support. A skeptic who wants proof is grading a paper, and the post that results from answering every such request is defended, hedged, and hard to read.
 
 **Each round:**
 
 1. Launch a fresh `general-purpose` agent with `run_in_background: false`. It never sees earlier skeptics' verdicts, earlier drafts, or your reasoning. A skeptic told what the last one objected to reads for that instead of reading the post. Give it this brief, with the file path filled in:
 
-   > You are a senior practitioner who knows this subject well and has no stake in the author's conclusion. Read `<file>`. Read only that file, and treat it as the whole case: you may web-search to check whether a cited claim is true, but not to strengthen the author's argument for them. Then decide whether the post convinced you of its thesis.
+   > You are a senior practitioner who knows this subject well and has no stake in the author's conclusion. Read `<file>`, a blog post: an argued position from a practitioner, not a research paper. Read only that file, and treat it as the whole case: you may web-search to check whether a cited claim is true, but not to strengthen the author's argument for them.
+   >
+   > Judge it as a blog post. The question is whether you'd recommend it to a colleague as a sound argument: the reasoning holds, each claim has a mechanism or a source, the post admits where it stops applying, and nothing in it is wrong. Agreeing with every conclusion isn't required. The author's stated experience counts as support for what they saw, and a post doesn't need prevalence data, incident reports, thresholds, or a measured comparison to make its case.
    >
    > Return:
    > - **Thesis**: the post's argument in one sentence, in your own words
-   > - **Convinced**: yes, partly, or no
-   > - **What convinced you**: each part that worked, and why
-   > - **What didn't**: each objection, numbered. For each, quote the passage, give the type (missing evidence, unanswered counterargument, logical gap, overreach, unclear claim, or a factual error you verified), say why it fails to persuade you, and say what would change your mind
+   > - **Recommend**: yes, yes with reservations, or no
+   > - **What worked**: each part that held up, and why
+   > - **Objections**: at most three, the strongest you have, numbered. Each must be one of these: a factual error you verified, a claim stated more broadly than the post argues it, a contradiction inside the post, or a counterargument most readers in this field would raise at once and the post never addresses. For each, quote the passage, give the type, mark it **blocking** (it's why you wouldn't recommend the post) or **minor**, and say what would fix it from the post's own reasoning
+   > - **Evidence wishes** (optional): data, incidents, or numbers that would make the post stronger. List them separately. They are not objections and don't affect your answer
    >
-   > Be specific. "Needs more evidence" is not an objection. Name the claim and the evidence that would carry it. Don't object to the author's voice or style, and don't tell the author to argue a different thesis.
+   > Be specific. Don't object to the author's voice or style, don't ask for evidence beyond what a blog post owes, and don't tell the author to argue a different thesis.
 
 2. If the skeptic's thesis sentence differs from the post's thesis, record that as an objection on its own. The post didn't communicate its argument, whatever else the skeptic thought.
 3. Give each objection an ID (`V1`, `V2`, continuing across rounds) and triage it under the same rules as Steps 2-10 and the **Autonomous resolution** rules: a statable defect, the smallest edit that fixes it, and Fixed, Decided, or Withdrawn.
    - **Fixed**: an overreach to narrow, a gap between steps that the post's own material can close, an unclear claim, a verifiable source the claim needs, or a counterargument the post can answer from its own reasoning.
-   - **Decided**: the fix needs a judgment call, such as restructuring, reconciling a contradiction, or conceding a limit. When it would need the author's experience or a number only they have, resolve it without inventing one: narrow the claim, source it, or cut it. The author's held position is never conceded to a skeptic. Strengthen the case for it or narrow it where it overreaches, but don't swap in the skeptic's view.
-   - **Withdrawn**: the objection is to voice or style, rests on a misreading the text doesn't invite, or asks for a different post.
+   - **Decided**: the fix needs a judgment call, such as restructuring, reconciling a contradiction, or conceding a limit. The author's held position is never conceded to a skeptic. Strengthen the case for it or narrow it where it overreaches, but don't swap in the skeptic's view.
+   - **Withdrawn**: the objection is to voice or style, rests on a misreading the text doesn't invite, asks for a different post, or asks for evidence a blog post doesn't owe.
+
+   **Evidence wishes go to the author, never into the file.** Collect every evidence wish, and every objection that only the author's experience or data could answer, into an **author evidence list** in the report. They trigger no edits. Don't hedge a claim to pre-empt a request for proof.
 
    **Place each fix where it reads, not where the objection points.** Prefer narrowing or cutting an overreach over adding a defense of it. When a fix does need a defense, add it inline only if the paragraph doesn't already carry one. Otherwise, put it in the one paragraph that faces that objection, or in the section on where the argument stops applying, and create that paragraph if it doesn't exist yet. Answering each objection with a clause where it came up is what makes a post persuasive and unreadable at once.
-4. Apply every Fixed and Decided objection to the file, keeping the reading-time budget (pay for additions with cuts, per Step 8). Re-run the Step 2 mechanical checks on the changed passages, and run the `/untangle` Step 1 density measure. A changed paragraph over about 120 words, or a new sentence over 35 words, gets split or consolidated before the next skeptic reads it.
+4. Apply every Fixed and Decided objection to the file. **The pass doesn't grow the post.** Across all rounds, the post ends no more than about 5% longer than it started, and never over the reading-time budget. Pay for each defense by cutting or tightening elsewhere, per Step 8. Re-run the Step 2 mechanical checks on the changed passages, and run the `/untangle` Step 1 density measure. A changed paragraph over about 120 words, or a new sentence over 35 words, gets split or consolidated before the next skeptic reads it.
 5. Start the next round with a new skeptic.
 
-**A returning objection**: when an objection a fix was supposed to resolve comes back in substance from a new skeptic, the fix didn't work. Try a different fix (a stronger source, a narrower claim, or a cut) and record both skeptics' reasons in the ledger.
+**A returning objection**: when an objection a fix was supposed to resolve comes back in substance from a new skeptic, try one different fix (a stronger source, a narrower claim, or a cut). If it comes back a third time, it's a disagreement with the author's position, not a defect. Mark it settled, list it in the verdict, and make no further edits for it.
 
 **Stop** when:
 
-- A skeptic answers **yes** and the post passes the **readability gate** below. That's the only success exit.
-- Every objection in a round is Withdrawn.
-- Five rounds have run without a yes.
+- A skeptic answers **yes** or **yes with reservations** with no blocking objection, and the post passes the **readability gate** below. That's the success exit. Fix that round's minor objections first if they're cheap, then run the gate.
+- Every objection in a round is Withdrawn or settled.
+- Three rounds have run without a success.
 
-**Readability gate**: a post that convinces a skeptic but loses an ordinary reader hasn't succeeded. When a skeptic says yes, run the `/untangle` Step 7 fresh reader on the post. It passes when the reader states the thesis correctly, states each section's point, and reports no lost thread. Otherwise, fix what the reader reported under the `/untangle` rules (content fixed, budget held) and run a new fresh reader, up to two times. The gate needs no new skeptic, because those fixes don't change the argument. If the post still fails after two readers, say so in the verdict and recommend running `/untangle`.
+**Readability gate**: a post that convinces a skeptic but loses an ordinary reader hasn't succeeded. When a skeptic recommends the post, run the `/untangle` Step 7 fresh reader on it. It passes when the reader states the thesis correctly, states each section's point, and reports no lost thread. Otherwise, fix what the reader reported under the `/untangle` rules (content fixed, budget held) and run a new fresh reader, up to two times. The gate needs no new skeptic, because those fixes don't change the argument. If the post still fails after two readers, say so in the verdict and recommend running `/untangle`.
 
-**Report**: after the review report, a **CONVINCE-ME** section with one row per round (round number, verdict, the skeptic's thesis sentence, objection IDs, and what you changed), the readability gate's result, then every `V#` finding in the findings ledger alongside the review's own. The verdict states whether a skeptic was convinced. A post that never convinced one isn't ready to publish, so name the objections the last skeptic still held and what was tried against each.
+**Report**: after the review report, a **CONVINCE-ME** section with one row per round (round number, verdict, the skeptic's thesis sentence, objection IDs marked blocking or minor, and what you changed), the readability gate's result, the before/after word count, and the **author evidence list**. Then every `V#` finding in the findings ledger alongside the review's own. The verdict states whether a skeptic recommended the post. If none did, name the blocking objections the last skeptic held, what was tried against each, and which are settled disagreements with the author's position.

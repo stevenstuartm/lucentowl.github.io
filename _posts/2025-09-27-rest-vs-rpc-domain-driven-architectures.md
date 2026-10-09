@@ -12,10 +12,10 @@ sources:
     url: "https://roy.gbiv.com/untangled/2009/it-is-okay-to-use-post"
   - title: "Google API Improvement Proposals, AIP-136: Custom methods"
     url: "https://google.aip.dev/136"
-  - title: "Roy Fielding, Architectural Styles and the Design of Network-based Software Architectures, Chapter 5: Representational State Transfer (REST)"
-    url: "https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm"
   - title: "Stripe API Reference: Idempotent requests"
     url: "https://docs.stripe.com/api/idempotent_requests"
+  - title: "Roy Fielding, Architectural Styles and the Design of Network-based Software Architectures, Chapter 5: Representational State Transfer (REST)"
+    url: "https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm"
 ---
 
 For years I have seen teams wrestle with REST in domain-driven systems. They start with clean REST endpoints then gradually compromise as business operations don't map to resource CRUD. After years or just months, they've abandoned most of what made REST attractive anyway. They invent phantom resources, hide operations in request bodies, and add gateway routing layers, all while gaining few of the architectural benefits REST was supposed to provide.
@@ -30,7 +30,7 @@ The mismatch isn't accidental. When you build systems around bounded contexts an
 
 Domain-driven design creates different models of the same entity within different contexts. In the Orders context, a "Customer" might be `{id, shippingAddress, paymentMethod}`. In the Identity context, that same person is a "User" with `{id, email, authProvider, preferences}`. Each context owns its own model because each serves different business capabilities.
 
-Resource-centric API design, as most teams practice it, assumes you can navigate a graph of shared resources. The `/users/{userId}/orders` pattern looks clean until you ask: which service owns "users"? The Orders service needs customer information, but it doesn't own the canonical user representation. The Identity service owns users but knows nothing about orders. Serving `/users/123/orders` means either the Identity service learns about orders or a gateway stitches two contexts' models behind one URL, and either way you've coupled services that should remain independent.
+Resource-centric API design, as most teams practice it, assumes you can navigate a graph of shared resources. The `/users/{userId}/orders` pattern looks clean until you ask: which service owns "users"? The Orders service needs customer information, but it doesn't own the canonical user representation. The Identity service owns users but knows nothing about orders. Serving `/users/123/orders` as a step in one graph, where a user resource leads to its orders, means either the Identity service learns about orders or a gateway stitches two contexts' models behind one URL. Either way you've coupled services that should remain independent.
 
 Teams resolve this tension by giving up the shared graph while keeping REST-like syntax:
 - Add context prefixes like `/orders/api/customers/{customerId}/orders`, acknowledging that "customers" in the Orders context aren't the same as "users" in Identity
@@ -39,13 +39,15 @@ Teams resolve this tension by giving up the shared graph while keeping REST-like
 
 Each approach acknowledges the same reality: there is no single "user" resource to navigate from. What all three give up is the navigable graph of shared entities, which is the part of resource design that made `/users/{userId}/orders` look clean in the first place. Each context ends up publishing its own resources in its own vocabulary.
 
-None of this is a case against REST's actual constraints. Roy Fielding wrote in "REST APIs must be hypertext-driven" that a REST API must not define fixed resource hierarchies at all, and a filtered collection is a perfectly good resource. Nor does RPC solve ownership, since an RPC call that lists a customer's orders has to live in one context too. What the split removes is the graph that made a resource model look like the whole design. Each context is left with its own small set of resources. Whether those resources can carry its writes depends on what those writes are.
+None of this is a case against REST's actual constraints. Roy Fielding wrote in "REST APIs must be hypertext-driven" that a REST API must not define fixed resource hierarchies at all, and a filtered collection is a perfectly good resource. Nor does RPC solve ownership, since an RPC call that lists a customer's orders has to live in one context too. What splitting into contexts removes is the graph that made a resource model look like the whole design. Each context is left with its own small set of resources. Whether those resources can also carry the context's writes depends on what those writes are.
 
 ## Business Operations Don't Map to Resource CRUD
 
 REST works well when business operations map cleanly to create, read, update, and delete. Even simple operations can break down when they carry business meaning beyond field changes. Domain-driven design makes those operations the norm. An aggregate changes only through its root, and the root enforces the aggregate's invariants. Its write path is already a set of commands like cancel or ship.
 
 Consider "cancel an order." In REST terms, this looks like updating the order's status field: `PATCH /orders/{id}` with `{"status": "cancelled"}`. But cancellation isn't just a field update. It triggers refund processing, releases reserved inventory, sends customer notifications, and updates analytics. The operation has validation rules (can't cancel shipped orders) and side effects that don't belong in a generic resource update.
+
+### Forcing Operations into Resources Hides Them
 
 Teams force this into REST through increasingly awkward patterns:
 
@@ -57,9 +59,13 @@ Teams force this into REST through increasingly awkward patterns:
 
 Each of the three patterns either hides the operation behind a standard verb or invents a resource to hang it on, while preserving REST-like URL structures. If even "cancel an order" doesn't fit the standard verbs cleanly, more complex operations like splitting a shipment fit them worse.
 
-The sub-resource itself isn't what fails in the last two patterns. A sub-resource earns its URL when the element has its own identity and its own lifecycle, like a label on an issue, a collaborator on a repository, or an item on a subscription. Each of those can be created, addressed, and removed on its own, and giving it an address takes an entire category of ambiguity out of the parent's update body. A transition earns no such URL. A cancellation or an email verification is something the order or the customer goes through, not something that lives beside it. Turning it into a stored collection to satisfy a URL convention invents an entity the domain doesn't have. Independent identity gets a sub-resource. A transition gets a named operation.
+### Sub-Resources Fit Identities, Not Transitions
 
-A singular `PUT /orders/{id}/cancellation` looks like a way around this rule. It avoids the stored collection and gets PUT's retry safety. But PUT claims to replace a representation the client supplied, so it has no natural way to report "cancelled, refund failed." DELETE on the same URL reads as un-cancel, which the domain may not allow.
+The sub-resource itself isn't what fails in the last two patterns. A sub-resource earns its URL when the element has its own identity and its own lifecycle, like a label on an issue, a collaborator on a repository, or an item on a subscription. Each of those can be created, addressed, and removed on its own, and giving it an address takes an entire category of ambiguity out of the parent's update body.
+
+A transition earns no such URL. A cancellation or an email verification is something the order or the customer goes through, not something that lives beside it. Turning it into a stored collection to satisfy a URL convention invents an entity the domain doesn't have. Independent identity gets a sub-resource. A transition gets a named operation.
+
+A singular `PUT /orders/{id}/cancellation` looks like a way around this rule. It avoids the stored collection, and PUT tells clients and proxies that a retry is safe. But a retried cancel must still refund only once, so the promise holds only if the server deduplicates the refund and the inventory release, the same deduplication a named operation needs. The URL still presents a transition as a resource, and DELETE on it reads as un-cancel, which the domain may not allow.
 
 A few cases look like exceptions to the rule, but none of them turns the transition itself into a resource:
 
@@ -67,7 +73,11 @@ A few cases look like exceptions to the rule, but none of them turns the transit
 - A cancellation earns its own sub-resource only when clients create and manage it as a thing in its own right, like an approval request that someone else accepts or rejects.
 - A transition that runs long enough to have a status of its own, like a refund that can fail partway, does need something clients can check. That is a handle to the running operation, which the named operation can return, not a new entity stored beside the order.
 
+### An API Made of Custom Methods Is RPC
+
 REST itself allows named operations, up to a point. Roy Fielding's "It is okay to use POST" says REST never required PUT for every state change, and Google's AIP-136 defines custom methods such as `POST /v1/{book}:archive` for operations the standard verbs don't cover. But when every meaningful business operation becomes a POST to a named verb, the API is RPC with resource-shaped URLs. Google's guidance makes resources the default and custom methods the exception. That default pays off when most of an API is standard methods, because uniform create, update, and delete conventions cover most of what clients change.
+
+### Count the State Changes That Carry Rules
 
 To tell which kind of API a context needs, apply this test:
 
@@ -76,30 +86,30 @@ To tell which kind of API a context needs, apply this test:
 3. Move every marked change out of the generic update and into a named operation.
 4. If the marked changes are most of the list, the exceptions become the context's write API, with resource reads beside it.
 
-The count in step 4 doesn't change how any single endpoint is designed. It decides whether the context lives by a resource API's conventions or by its own. A few custom methods can borrow a resource API's conventions, but an API made mostly of them can't.
+The count in step 4 doesn't change how any single endpoint is designed. It decides whether the context can lean on a resource API's conventions for naming, errors, and retries, or has to set its own. A few custom methods can follow the conventions their resources set, but an API made mostly of them has to define its own.
 
 Designing for that on purpose means each operation gets its own request type, its own preconditions, and its own error contract. A client calling cancel then sees "already shipped" and "refund failed" as distinct, documented outcomes rather than generic update errors. It also means the team owns conventions that a resource model would have supplied, because an operations-first API without them sprawls into bespoke verbs that each behave differently. The minimum is:
 
 - A verb naming rule
 - One error envelope with per-operation codes
-- Idempotency keys on every write
+- Idempotency keys on every write, like the `Idempotency-Key` header Stripe's API accepts on every POST
 - One shape for the handle a long-running operation returns
 
 ## REST's Technical Benefits Rarely Apply
 
 REST's architectural constraints provide real benefits in certain contexts. HTTP caching through intermediary proxies can reduce server load, hypermedia enables clients to discover capabilities dynamically, and the uniform interface allows generic tooling to work across different APIs. Operation-heavy contexts rarely benefit from any of these.
 
-**Caching assumes stable representations.** A CDN caching `/orders/12345` doesn't know that an order was just cancelled, shipped, or had items refunded. You can set `Cache-Control: max-age=60`, but that means clients might see stale data for up to a minute after significant business events. For an order status page, showing "Processing" when the order already shipped erodes user trust. You end up setting aggressive cache expiration or bypassing caches entirely, negating the benefit.
+**Caching assumes stable representations.** Neither style can share-cache order reads, and staleness is why. A CDN caching `/orders/12345` doesn't know that an order was just cancelled, shipped, or had items refunded. You can set `Cache-Control: max-age=60`, but that means clients might see stale data for up to a minute after significant business events. For an order status page, showing "Processing" when the order already shipped erodes user trust. So these reads end up private, short-lived, or uncached.
 
-Conditional requests with ETags avoid serving stale data, but every read still reaches the origin to revalidate. They save bandwidth, and they save server work only where the server can check a version without loading the whole order. A per-customer order page is usually marked private and kept out of shared caches anyway. REST caching works well for static content or slowly-changing reference data, not for entities whose state changes through business operations. For these reads, caching is neutral between the styles, since an RPC read can't be shared-cached either. Reads can stay on GET, but caching gives no reason to model transitions as resources.
+Conditional requests with ETags avoid serving stale data, but every read still reaches the origin to revalidate. They save bandwidth, and they save server work only where the server can check a version without loading the whole order. REST caching works well for static content or slowly-changing reference data, not for entities whose state changes through business operations. Reads can stay on GET, but caching gives no reason to model transitions as resources.
 
 **Hypermedia assumes discoverable, stable relationships.** The idea is that clients navigate links in responses rather than hardcoding URLs. But in domain-driven systems, what operations are available depends on business rules, not just resource state. Can this order be cancelled? That depends on payment status, shipping status, time since placement, and customer tier. Encoding all that context in hypermedia links means the server must evaluate business rules on every response just to populate the `_links` section.
 
-That server-side rule evaluation is also hypermedia's strongest case in a domain system. The server is the one place that knows the rules, and a client that follows a `cancel` link never duplicates them. A UI that shows a Cancel button on every order view pays for the same rule evaluation in either style, so the cost alone doesn't decide it. What decides it is whether clients follow links instead of hardcoding URLs. Internal service-to-service clients rarely do, and most teams never implement hypermedia controls for them because the complexity isn't worth it. Wherever clients hardcode URLs, in any kind of context, hypermedia is a weak reason to choose REST.
+Hypermedia still rarely pays off here, but not because of that cost. The same rule evaluation is also hypermedia's strongest case in a domain system. The server is the one place that knows the rules, and a client that follows a `cancel` link never duplicates them. A UI that shows a Cancel button on every order view pays for the same rule evaluation in either style. What decides it is whether clients follow links instead of hardcoding URLs. Internal service-to-service clients rarely do, and most teams never implement hypermedia controls for them because the complexity isn't worth it. Wherever clients hardcode URLs, in any kind of context, hypermedia is a weak reason to choose REST.
 
 **Uniform interface assumes generic operations.** REST's power comes from treating all resources the same way: GET retrieves, PUT replaces, DELETE removes. Generic tooling can work across APIs because the verbs are standardized. But domain operations aren't generic. "Cancel order" and "cancel subscription" may share a verb in English, but they have completely different validation rules, side effects, and error modes. Forcing them into the same `PATCH` or `DELETE` pattern hides these differences behind a uniform interface that clients must then learn to navigate through documentation and tribal knowledge.
 
-Uniformity's practical value sits mostly in the plumbing. Client retry rules key off the method, gateways treat GET as safe, and rate limits and dashboards key off method and path. An operations-first context keeps nearly all of it, because its reads stay GET. Its transitions were POSTs or status PATCHes in the resource design too, and a client can't safely retry either one blindly. What it does give up is tooling that assumes resource semantics, like generated admin screens and generic CRUD clients, and those matter least for writes that a generic client shouldn't be making.
+Uniformity's practical value sits mostly in the plumbing. Client retry rules key off the method, gateways treat GET as safe, and rate limits and dashboards key off method and path. An operations-first context keeps nearly all of it, because its reads stay GET. Its transitions would have been POSTs or status PATCHes in a resource design too, and a client can't safely retry either one blindly. What it does give up is tooling that assumes resource semantics, like generated admin screens and generic CRUD clients, and those matter least for writes that a generic client shouldn't be making.
 
 Few teams collect these benefits even where they would apply. Most learn "REST" from tutorials teaching HTTP + JSON + resource URLs, never encountering the actual constraints that make REST architecturally significant. They end up with HTTP-based RPC that pretends to be RESTful without gaining any of the benefits Fielding described in the REST chapter of his dissertation.
 
@@ -109,13 +119,11 @@ Neither approach is universally better. The choice depends on how your domain na
 
 **REST fits entity-driven systems.** Media libraries, inventory catalogs, and configuration management often align well with REST. Resources have stable identities, relationships are navigable, and standard CRUD operations match what the business actually does. A photo library really is a collection of photo resources that you create, read, update, and delete. REST's constraints provide genuine value here: caching works because photos don't change often, hypermedia can express album-to-photo relationships for clients that follow links, and generic tooling can operate across different media types.
 
-**RPC fits operation-driven systems.** Operation-heavy contexts are the ones where most state changes carry rules and side effects. They align better with explicit operations, meaning endpoints named after what the business does, whether they run over plain HTTP and JSON or a framework like gRPC. Endpoints like `/orders/cancel`, `/orders/refund`, and `/orders/split-shipment` map directly to what the business actually does. The API's vocabulary is the domain's vocabulary. Each endpoint serves a single purpose, so the API's structure keeps transitions apart instead of a handler's switch statement, and each one's request type and errors can be generated and documented on their own.
+**RPC fits operation-driven systems.** Operation-heavy contexts are the ones where most state changes carry rules and side effects. They align better with explicit operations, meaning endpoints named after what the business does, whether they run over plain HTTP and JSON or a framework like gRPC. Endpoints like `/orders/cancel`, `/orders/refund`, and `/orders/split-shipment` map directly to what the business actually does. The API's vocabulary is the domain's vocabulary. Each endpoint serves a single purpose, so the API's structure, not a handler's switch statement, keeps transitions apart, and each one's request type and errors can be generated and documented on their own.
 
 The URL form matters far less than that contrast. Whether it reads `POST /orders/cancel` or the AIP-style `POST /orders/{id}:cancel`, either beats a `PATCH /orders/{id}` that might update the order status, add line items, change shipping addresses, or trigger cancellation depending on the request body. The AIP style does keep the order ID visible to gateway rules and logs keyed on path.
 
-Either form can be operations-first, and an AIP-style API built mostly from custom methods is the same design under another name. What makes a design operations-first is where it starts. It starts from the operations and their contracts, with resources added for reads. Starting there also means fields with workflows behind them, like status, can't be changed through a generic update at all.
-
-RPC gives something up in exchange. Operations sent as POST lose HTTP caching and the retry safety that idempotent methods signal to clients and proxies. So an operation like cancel needs its own idempotency key, the way Stripe's API accepts an `Idempotency-Key` header on every POST. Reads that really are entity lookups can stay plain GETs.
+Either form can be operations-first, and an AIP-style API built mostly from custom methods is an operations-first API with resource-style URLs. What makes a design operations-first is where it starts. It starts from the operations and their contracts, with resources added for reads. Starting there also means fields with workflows behind them, like status, can't be changed through a generic update at all.
 
 | What the domain does | What fits |
 | --- | --- |

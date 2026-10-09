@@ -16,6 +16,8 @@ I tend to think of reporting and production as incompatible roommates. They need
 
 Consider what happens when the analytics team asks for a denormalized `order_summary` view on the production database so their dashboards load faster. The DBA obliges, adds a materialized view, and now every schema migration has to account for it. Six months later the application team wants to split the `orders` table into `orders` and `order_line_items`. But the view is embedded in 10 dashboard queries and a nightly export job, and most of those queries also join it back to columns on `orders` directly. Redefining the view over the new tables is the easy part. Rewriting and revalidating a dozen queries the application team doesn't own is not, so the refactor stalls, and the production schema fossilizes around a reporting concern.
 
+## Reporting Tends to Win Every Schema Negotiation
+
 The cause is structural. A transactional schema optimizes for write consistency, referential integrity, and the access patterns of the application that owns it. A reporting schema optimizes for read throughput, aggregation, and the access patterns of analysts and dashboards. When both share a schema, every design decision becomes a negotiation.
 
 Once dashboards reach executives or exports reach outside consumers, reporting tends to win that negotiation, because saying no gets more expensive with every dashboard that already depends on a yes. Its requests arrive one at a time as small additions (a column, an index, a view), each cheap to accept and expensive to remove. A refactor's payoff is deferred, while a broken dashboard is visible to leadership the same morning.
@@ -48,6 +50,8 @@ The simplest place to start is to point reporting tools at a read replica of the
 ```
 
 This is a feasible fit when reporting needs are straightforward and the production schema is close enough to what reporting consumers need. It also assumes data that's a few seconds stale is acceptable. "A few seconds stale" is the optimistic case, though. Heavy analytical queries on the replica can cause replication lag to spike well beyond that, especially during peak reporting windows.
+
+The isolation is partial, too. On a PostgreSQL standby, a long report can block the replica from applying changes. The replica then either cancels the report or, with `hot_standby_feedback` on, stops the primary from cleaning up dead rows. Reporting indexes land on production too, because a replica can't hold indexes of its own.
 
 The replica breaks down when reporting needs diverge far enough from the production schema's shape. Reporting consumers write increasingly complex queries with multiple joins, or they start requesting schema changes to production to make their queries simpler, which is exactly the distortion this post is about.
 
@@ -87,17 +91,19 @@ CDC tools like Debezium tap the database's transaction log and emit changes as e
             └────────────────┘
 ```
 
-CDC's greatest strength is that it requires no application code changes and no new abstractions in the write path. That makes it often the only viable option for legacy systems where changing the write path is too risky, or for teams that need separation now and can't modify every service that writes data. It also tends to deliver complete payloads, because the log carries the full new row even when the application updated a single field.
+CDC's greatest strength is that it requires no application code changes and no new abstractions in the write path. That makes it often the only viable option for legacy systems where changing the write path is too risky, or for teams that need separation now and can't modify every service that writes data. It also tends to deliver complete payloads, because the log usually carries the full new row even when the application updated a single field.
 
 The first limitation is semantic. CDC events originate from the database layer, so they capture *what* changed but not *why* it changed. A row update that represents a customer canceling an order looks identical to a row update that represents a system correcting a data entry error.
 
-Columns like `cancelled_by` and `cancel_reason` record the why only when the application itself needs them, because then they're domain state and CDC carries them. Adding them only for reporting is the distortion this post started with. And some intent has no natural row to live on at all, such as a correction or a change spanning several entities. For financial ledgers or audit-critical workflows, where intent is as important as state, the write path has to record the intent itself, which is what the outbox and event sourcing below do.
+The obvious workaround is to add columns like `cancelled_by` and `cancel_reason`. They record the why only when the application itself needs them, because then they're domain state and CDC carries them. Adding them only for reporting is the distortion this post started with. And some intent has no natural row to live on at all, such as a correction or a change spanning several entities. For financial ledgers or audit-critical workflows, where intent is as important as state, the write path has to record the intent itself, which is what the outbox and event sourcing below do.
 
 The second limitation is the absence of a contract boundary. The table structure *is* the contract, implicitly. When that schema changes, nothing fails at build time. The CDC pipeline either silently emits differently shaped events or breaks at runtime, and reporting consumers discover the problem in production rather than in development.
 
-Two mitigations narrow that gap without closing it. A transformation layer that maps raw tables onto a stable reporting model, such as warehouse staging models, shrinks the fix to one place. But the reporting side owns that layer, so it learns of production changes only after they ship. A schema registry can partially close this gap by rejecting incompatible schema versions when the pipeline tries to register them, but that's added infrastructure catching incompatibility at runtime rather than at build time.
+Two mitigations narrow that gap without closing it. A transformation layer that maps raw tables onto a stable reporting model, such as warehouse staging models, shrinks the repair after a schema change to one place. But the reporting side owns that layer, so it learns of production changes only after they ship. A schema registry can partially close this gap by rejecting incompatible schema versions when the pipeline tries to register them, but that's added infrastructure catching incompatibility at runtime rather than at build time.
 
-The third limitation is database dependency. CDC is only as good as the log the database exposes. PostgreSQL's logical decoding, MySQL's binlog, and DynamoDB Streams are mature options. But a managed service that restricts log access, or a stream that retains changes only briefly (DynamoDB Streams keeps 24 hours), can push teams toward application-layer alternatives earlier than expected. Reading the log also loads the primary. Logical decoding adds write-ahead log volume to every write. A PostgreSQL replication slot also holds that log on the primary until the connector consumes it, so a stalled CDC pipeline can fill the production database's disk.
+The third limitation is database dependency. CDC is only as good as the log the database exposes. PostgreSQL's logical decoding, MySQL's binlog, and DynamoDB Streams are mature options. But a managed service that restricts log access, or a stream that retains changes only briefly (DynamoDB Streams keeps 24 hours), can push teams toward application-layer alternatives earlier than expected.
+
+Reading the log also loads the primary. Logical decoding adds write-ahead log volume to every write. A PostgreSQL replication slot also holds that log on the primary until the connector consumes it, so a stalled CDC pipeline can fill the production database's disk.
 
 ## Intentional Separation Captures Intent in the Write Path
 
@@ -177,7 +183,7 @@ CREATE TABLE outbox (
 }
 ```
 
-The outbox has an explicit, versionable contract boundary. A breaking change to the outbox record is a deliberate code change that goes through review. If a developer renames a column in the production schema, the outbox record doesn't change unless someone deliberately updates it. A contract test in CI fails the build on a shape change instead of a dashboard, and unlike a test on CDC tables, it lives in code its owners already test. The outbox table itself is a reporting concern in the production database, but domain tables never read or join it. Changing a domain table changes only the code that maps it into the record.
+The outbox has an explicit, versionable contract boundary. A breaking change to the outbox record is a deliberate code change that goes through review. If a developer renames a column in the production schema, the outbox record doesn't change unless someone deliberately updates it. A contract test in CI fails the build when the record's shape changes, before any dashboard breaks. Unlike a test on CDC tables, it lives in code its owners already test. The outbox table itself is a reporting concern in the production database, but domain tables never read or join it. Changing a domain table changes only the code that maps it into the record.
 
 Because a polling relay doesn't rely on transaction log capabilities or vendor-specific change feed APIs, any database that supports transactions supports the pattern. A relay built on CDC, such as Debezium's outbox event router, inherits CDC's operational risks but not its implicit contract.
 
@@ -185,7 +191,7 @@ The outbox does not require a record for every database write. It only fires whe
 
 That selectivity is also the outbox's main risk. A bulk admin script or hand-written SQL fix that changes an order's status without writing to the outbox leaves reporting silently incomplete. CDC can't miss a change that way, because it reads every committed change. Emitting the record from the domain model's state transition closes most of that gap, and out-of-band SQL against tracked tables has to write its own outbox record.
 
-With that risk handled, for teams that have outgrown a read replica, need reporting to know who acted and why, and don't need full event sourcing, the outbox is my recommendation.
+The outbox is my recommendation for teams that have outgrown a read replica, need reporting to know who acted and why, and don't need full event sourcing.
 
 ### CQRS and Event Sourcing Keep Every Transition at the Highest Cost
 
@@ -273,7 +279,7 @@ The projected table above is what reporting reads in practice. Reporting consume
 
 This is a good fit for domains where the complete history of state transitions is genuinely valuable, like financial ledgers, audit-critical workflows, or systems where "undo" and "replay" are first-class requirements.
 
-Most teams should not reach for this combination. Martin Fowler has warned consistently, most directly in his CQRS article, that CQRS is misapplied far more often than it's applied well. Many systems fit a CRUD mental model and should stay that way. CQRS should only apply to specific bounded contexts where the read and write access patterns are genuinely different, not across entire applications. Event sourcing compounds the cost: events are immutable and permanent so schema design requires careful thought, aggregate replay gets expensive without snapshotting, and debugging production issues means reasoning about event sequences rather than inspecting current state.
+Most teams should not reach for this combination. Martin Fowler's CQRS article warns that most of the CQRS cases he has run into have not gone well. Many systems fit a CRUD mental model and should stay that way. CQRS should only apply to specific bounded contexts where the read and write access patterns are genuinely different, not across entire applications. Event sourcing compounds the cost. Events are immutable and permanent, so schema design requires careful thought. Aggregate replay gets expensive without snapshotting, and debugging production issues means reasoning about event sequences rather than inspecting current state.
 
 ## Choosing an Approach by What Reporting Needs to Know
 
@@ -286,10 +292,10 @@ Most teams should not reach for this combination. Martin Fowler has warned consi
 
 ## Separate Early or Pay Later
 
-Separating early means separating the access path before dashboards depend on base tables, not building a pipeline. The first request for a reporting-only column or view on production is the cue. A read replica is enough to start, but every shortcut that ties these workloads together makes the eventual separation harder. The analytics team and the application team end up negotiating every schema change, and the production schema accumulates the concerns of whoever complained most recently.
+Separating early means separating the access path before dashboards depend on base tables, not building a pipeline. The first request for a reporting-only column or view on production is the cue. Every shortcut that ties these workloads together makes the eventual separation harder. The analytics team and the application team end up negotiating every schema change, and the production schema accumulates the concerns of whoever complained most recently.
 
-Starting on a replica is only safe if dashboards query plain views rather than base tables. Those views live in a reporting schema the application team owns and can redefine, with grants that reach nothing else. Migrations still update the views, but now the team running the migrations owns them. When those views get too slow or too costly to redefine, move past the replica, to CDC if reporting needs only what changed and to an outbox if it needs why.
+A read replica is enough to start, but only if dashboards query plain views rather than base tables. Those views live in a reporting schema the application team owns and can redefine, with grants that reach nothing else. Migrations still update the views, but now the team running the migrations owns them. When those views get too slow or too costly to redefine, move past the replica, to CDC if reporting needs only what changed and to an outbox if it needs why.
 
-Whichever step comes next, reporting reads an owned surface rather than raw tables, whether that's views on the replica, a transformation layer on CDC, or an outbox record. If intent matters (who acted, why, under what conditions), the write path has to capture it deliberately, because the database log only carries what the application writes.
+Whichever step comes next, reporting reads an owned surface rather than raw tables, whether that's views on the replica, a transformation layer on CDC, or an outbox record. That owned surface keeps the schema from freezing, and the separate store keeps reporting load off production.
 
-The owned contract surface keeps the schema from freezing, and the separate store keeps reporting load off production. Separation doesn't remove the coupling, but it gives the coupling an owner. With an outbox, the application team owns the record and its versions, and the analytics team owns the projection built from it. A production schema change that leaves the record's version intact ships without asking anyone.
+Separation doesn't remove the coupling, but it gives the coupling an owner. With an outbox, the application team owns the record and its versions, and the analytics team owns the projection built from it. New questions about who or why still reach the application team, but as a reviewed change to a versioned record, and older records won't carry the new context. A production schema change that leaves the record's version intact ships without asking the analytics team.

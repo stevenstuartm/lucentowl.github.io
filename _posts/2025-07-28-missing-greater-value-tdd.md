@@ -16,19 +16,25 @@ author: steven-stuart
 
 In software development, the mistake that tends to cost more isn't the typical bug. It's building the wrong thing. A bug announces itself when something fails, and the fix is usually local. A wrong feature passes every test, ships, and only shows up when users don't use it. By then the design, the data model, and the code around it all rest on the misunderstanding. Some bugs break that pattern, such as corrupted data or a security hole, but they're the exception rather than the typical case.
 
-Teams should be focused on preventing the delivery of features that don't match what users need, implementing requirements that were misunderstood, or discovering halfway through that the domain model was wrong. Test-Driven Development (TDD) is one solution to this problem, but it's often a very poorly understood concept, and even those who do understand it can still do TDD wrong. Dan North, who coached teams in TDD, wrote in "Introducing BDD" that people's misunderstandings of TDD "almost always came back to the word 'test'." His answer was Behaviour-Driven Development. Practices like Gojko Adzic's Specification by Example put the same concrete examples in front of stakeholders before any code exists. Those are TDD's idea with better vocabulary, and this post is about that idea.
+Teams should be focused on preventing the delivery of features that don't match what users need, implementing requirements that were misunderstood, or discovering halfway through that the domain model was wrong. Test-Driven Development (TDD) is one solution to this problem, but it's often a very poorly understood concept, and even those who do understand it can still do TDD wrong.
+
+Dan North, who coached teams in TDD, wrote in "Introducing BDD" that people's misunderstandings of TDD "almost always came back to the word 'test'." His answer was Behaviour-Driven Development. Practices like Gojko Adzic's Specification by Example put the same concrete examples in front of stakeholders before any code exists. BDD and Specification by Example are TDD's idea with better vocabulary, and this post is about that idea.
 
 The promise of TDD is that tests guide design and catch bugs early. The reality, sometimes, is that teams write tests for features they don't yet understand, design interfaces around incomplete requirements, and spend hours on tests that get thrown away when understanding finally arrives. The resulting debate often gets heated. Advocates measure test coverage and celebrate red-green-refactor. Skeptics count rewritten tests as waste. Both sides miss what actually happened: when done right, those rewritten tests forced understanding before the wrong system got built and delivered. When done wrong, they were just ceremony.
 
 <blockquote class="pull-quote">
-<p>TDD's value isn't in the tests. It's in the understanding that writing them demands.</p>
+<p>Much of TDD's value isn't in the tests. It's in the understanding that writing them demands.</p>
 </blockquote>
 
 ## Testing Assumptions, Not Just Code
 
+### Business-Rule Tests State Assumptions
+
 Most discussions frame TDD as a code quality tool: write tests first, implement to pass, refactor for quality. Coverage metrics become the measure of success. But every test also encodes assumptions about user needs and business logic. When you write a test asserting business rules, you're stating assumptions about how the system should behave, and not just your assumptions as a developer but the ones baked into the requirements themselves. A test can't check those assumptions against users on its own. Writing it makes them concrete enough to check, against the codebase and against someone who knows the business.
 
-Not every test carries business assumptions. Small tests around a class's collaborators mostly serve design. The argument here is about the tests that assert business rules. In an ordinary TDD session those are the first test or two for each new rule, written before you know which classes you'll need. They can catch a requirement that was misunderstood, not one that was wrong to begin with. Whether users value a premium discount at all is a question for prototypes and users, not tests.
+Not every test carries business assumptions. Small tests around a class's collaborators mostly serve design, so the argument here is about the tests that assert business rules. In outside-in TDD, those are the first test or two for each new rule, written at the rule's boundary before you know which classes you'll need. A developer who starts inside-out from a helper class still gets TDD's small steps, but not this gain. Even these tests have a limit. They can catch a requirement that was misunderstood, not one that was wrong to begin with, because whether users value a premium discount at all is a question for prototypes and users.
+
+### Writing the Assertion Forces the Choice
 
 For those business-rule tests, timing is the gain. Writing the test first means you don't build for days before discovering misalignment, which is what happens when tests come at the end of a feature or not at all. You might find that an entire scope of work needs to go back for reconsideration, and finding that on day one is obviously better than finding it on day ten.
 
@@ -38,13 +44,17 @@ Even the expected value forces a choice. On a $100 order that already carries a 
 
 That only helps if the choice reaches someone who knows the business. The habit that makes it work is taking any assertion you had to guess at to the product owner before moving on. TDD doesn't supply that habit. It supplies the moment where the guess becomes visible to the developer.
 
-The test's setup can expose the larger misunderstanding too. To build a premium customer for the test, you have to decide what makes a customer premium, and asking that is how you learn that product meant purchase history rather than a tier. If nobody asks, discovery happens later when product clarifies it. The test is then where the correction lands, as one visible, reviewable edit rather than a hunt through the code. Either way, the test change isn't waste. It's learning captured before shipping wrong behavior.
+The test's setup can expose the larger misunderstanding too. To build a premium customer for the test, you have to decide what makes a customer premium. If you ask, you learn early that product meant purchase history rather than a tier. If nobody asks, product clarifies it later anyway, and the test is where the correction lands, as one visible, reviewable edit rather than a hunt through the code. Early or late, the test change isn't waste. It's learning captured before shipping wrong behavior.
 
 A wrong assumption found before implementation costs a conversation, and found after, it costs the conversation plus the code built on it. Tests force specific questions that conversation alone often leaves unasked, because an assertion needs an exact input and an exact expected output where a requirements discussion can stay abstract.
 
+### Test-First Makes the Question a Default
+
 Other routes can surface the same guess. A careful developer writing code first can meet the same question, and an example card in a Specification by Example session forces the same choice. TDD's claim isn't that only a test can force the choice. It's that a test-first habit forces the choice every time a developer starts a new rule, as a default rather than a matter of care, including on teams that never hold those sessions. It also reaches rules no session thought to raise, like how a premium discount stacks with a promo code, because those only appear when someone writes out the specific case.
 
-Skeptics still count the rewrites as waste. That doesn't mean tests must stay purely conceptual to avoid it. Mocked code and implementation details in tests encode their own assumptions that sometimes only get validated through actual implementation. Some test code will get thrown away. That's fine. A little code waste is a small price compared to the larger waste of building the wrong system because critical misalignments went undiscovered. It stays little when tests written under uncertainty are few and coarse, so a rewrite touches a handful of assertions rather than a suite.
+### Rewrites Are Learning Unless They Track Implementation
+
+Skeptics still count the rewrites as waste, and some test code will get thrown away. Mocks and implementation details in a test encode their own assumptions, and some of those only get checked by building the code. That's fine. A little code waste is a small price compared to the larger waste of building the wrong system because critical misalignments went undiscovered. It stays little when tests written under uncertainty are few and coarse, so a rewrite touches a handful of assertions rather than a suite.
 
 When large test rewrites happen repeatedly, though, they might signal something else. The tests may be coupled to implementation details rather than behavior, so every internal change breaks them. Or the developer who wrote them was going through the motions rather than asking what the code should do. The trigger tells you which. A rewrite prompted by a stakeholder's answer or a newly found domain fact is learning, and a rewrite prompted by a refactor that changed no behavior is coupling.
 
@@ -54,17 +64,17 @@ TDD treated as a checklist rather than a discipline for understanding will produ
 
 This reframing should change what we measure, but not by replacing one test metric with another. Using test coverage as a success metric is a distraction. Measuring "assumptions caught" would be too. Value delivered is the only meaningful measure of success.
 
-One signal connects value back to the tests: features that return for rework because a business rule was misunderstood. Compare one team's count before and after it adopts the habit. That's a team signal rather than proof, since changed minds feed the same count. It still beats comparing rules that had a business-rule test first against rules that didn't, because developers may write tests first more readily for rules they already understand.
+One signal connects value back to the tests: features that return for rework because a business rule was misunderstood. Compare one team's count before and after it adopts the habit. That's a team signal rather than proof, since rework also comes from stakeholders changing their minds. Don't compare rules that got a business-rule test first against rules that didn't. Developers may write tests first more readily for rules they already understand, so that comparison flatters the habit.
 
 Coverage metrics can still provide useful insight into quality gaps, but think in terms of use case coverage rather than line coverage. Are the critical business scenarios tested? Are the edge cases stakeholders care about covered? That's a different question than "what percentage of lines have tests?"
 
-Tests are a tool, not an outcome. When teams treat coverage percentages as goals or count rewritten tests as waste, they've confused the means for the end. What matters isn't "how many tests do we have?" or "how many wrong assumptions did we catch?" but "did we deliver what users actually needed?"
+Tests are a tool, not an outcome. When teams treat coverage percentages as goals or count rewritten tests as waste, they've confused the means for the end.
 
 The test suite does have secondary value as documentation that new developers can read to understand system constraints without digging through old conversations and tickets. But that's a side effect, not a success metric.
 
 ## Match the Test to How Settled the Requirement Is
 
-Focus on testing assumptions that matter most. Not all assumptions carry equal risk. Prioritize tests that validate:
+Which tests to write first depends on how risky the assumption is, and how to write them depends on how settled the requirement is. The riskiest assumptions tend to sit in:
 
 - **Business rules.** How discounts work, what triggers notifications, when transactions are valid
 - **Edge cases stakeholders haven't considered.** What happens when the cart is empty? When the user has no purchase history?
@@ -81,7 +91,7 @@ Classifying a requirement as clear is itself an assumption, and the falsely sett
 
 How settled the requirement is matters more than the usual debate about test-first versus test-after. A study by Davide Fucci and colleagues of 39 professionals found that the order of test and production code had no important influence on code quality or productivity, while small, steady steps did. Small steps are a benefit TDD brings to the code itself, separate from the understanding this post is about.
 
-That study scored code against predefined stories on small coding tasks. The requirements were already specified, so there was nothing to misunderstand. So the study speaks to code quality and productivity, not to catching misunderstood requirements. There, the case for writing the test first rests on mechanism rather than data. An assertion written before the code has to state the expected value with no code to copy it from. A missing answer shows up as a blank the developer must fill, and the choice sits on one line a reviewer or stakeholder can read and question. One written after can simply record whatever the code already does, and the choice stays buried in the order of the arithmetic.
+That study scored code against predefined stories on small coding tasks. The requirements were already specified, so there was nothing to misunderstand. Its finding covers code quality and productivity, not catching misunderstood requirements. For catching them, the case for writing the test first rests on the mechanism the discount example showed rather than on data. An assertion written before the code has to state the expected value with no code to copy it from, while one written after can simply record whatever the code already does.
 
 The better question is what assumptions you're making about user needs and how to validate them fastest. Sometimes that's writing a test first, other times it's building a prototype first, and sometimes it's showing mockups to users first. The goal isn't perfect tests. It's validated understanding.
 
@@ -95,7 +105,7 @@ Writing the test first forces a question: what should this code actually do? Tha
 
 When tests change during development, you're realigning based on discovery. When tests fail after changes, they're surfacing broken commitments that need attention. The discipline isn't about tests. It's about starting with understanding, securing genuine commitment to what you're building, and then honoring what was agreed.
 
-Building the wrong thing is the more expensive mistake. TDD's first business-rule tests address this by forcing clarity before code, but only when practiced as inquiry rather than compliance. Tests that surface wrong assumptions early are valuable even when they get rewritten. Tests written as ceremony produce waste without insight.
+Building the wrong thing is the more expensive mistake. TDD's first business-rule tests address the misunderstood-requirement half of it by forcing clarity before code, but only when practiced as inquiry rather than compliance. Tests that surface wrong assumptions early are valuable even when they get rewritten. Tests written as ceremony produce waste without insight.
 
 In practice, that means:
 

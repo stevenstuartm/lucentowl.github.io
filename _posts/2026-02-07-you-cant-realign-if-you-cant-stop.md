@@ -36,17 +36,17 @@ What changed it for me was learning to think about work in terms of business val
 
 ## Continuing Wins Because It Takes Less Thought
 
-Pilots call it get-there-itis. Researchers call it plan continuation bias. Judith Orasanu and colleagues at NASA's Ames Research Center went through the tactical decision errors in the 37 accidents covered by the NTSB's 1994 review of flightcrew-involved major accidents. Of the 51 tactical decision errors in that corpus, 38 were decisions to continue the original plan despite cues suggesting a different course of action. These weren't errors of flying skill. They were errors of continuation.
+Pilots call it get-there-itis. Researchers call it plan continuation bias. Judith Orasanu and colleagues at NASA's Ames Research Center went through the tactical decision errors in the 37 accidents covered by the NTSB's 1994 review of flightcrew-involved major accidents. Of the 51 tactical decision errors in that corpus, 38 were decisions to continue the original plan despite cues suggesting a different course of action.
 
-The ratio isn't a pure measure of bias. The sample counts only flights that ended in accidents, so nobody knows how often crews continued in similar conditions and landed safely. Continuing is also the option on the table far more often than diverting. What the cases do show is crews who had the cues calling for a change and carried on anyway.
+The ratio isn't a pure measure of bias. The sample counts only flights that ended in accidents, so nobody knows how often crews continued in similar conditions and landed safely. Crews also choose to continue far more often than to divert, so continuing has more chances to go wrong. What the cases do show is crews who had the cues calling for a change and carried on anyway.
 
-Orasanu's team locates much of the cause in effort rather than stubbornness. Revising your understanding of a situation and working out a new course of action costs more cognitive work than continuing with a plan whose details are already settled. People are more often than not cognitive misers who take the cheap operation when it's available. Workload, time pressure, and ambiguous signals all shrink the budget for the expensive operation at exactly the moment it's needed. The original plan doesn't win the argument. It wins by default, because it never has to have one.
+Orasanu's team locates much of the cause in effort rather than stubbornness. Revising your understanding of a situation and working out a new course of action costs more cognitive work than continuing with a plan whose details are already settled. People tend to take the cheap operation when it's available. Workload, time pressure, and ambiguous signals all shrink the budget for the expensive operation at exactly the moment it's needed. The original plan doesn't win the argument. It wins by default, because it never has to have one.
 
-The stakes and the minute-by-minute time pressure don't transfer to software, but the default does. Revising a plan still takes more thought than continuing it, and the budget for that thought still shrinks under deadlines and under commitments other people have built on. There is evidence for this at the scale of whole projects. Mark Keil's 1995 case study of a runaway software project found the same escalation, driven by project, psychological, social, and organizational factors together. The single-task version this post describes is an argument from the same mechanism, not a measured result.
+The stakes and the minute-by-minute time pressure don't transfer to software, but the default does. Revising a plan still takes more thought than continuing it, and the budget for that thought still shrinks under deadlines and under commitments other people have built on. There is evidence for this at the scale of whole projects. Mark Keil's 1995 case study of a runaway software project found a failing course of action kept alive by project, psychological, social, and organizational factors together. Nobody has measured the single-task version. It rests on the same mechanism.
 
 What software lacks is the warning. A pilot pressing into weather has minutes and no undo. A developer pressing on with the wrong approach has weeks, git can undo any of it, and the work ends the way good work does, reviewed and merged. The pilot who got away with it at least knows it was close. The developer rarely learns there was anything to get away with. When the cost does arrive, it arrives months later as slow delivery or a rewrite, blamed on tech debt rather than on the choice. So the software version of the bias seldom corrects itself.
 
-Our own advice makes it worse. "Finish what you started" is plan continuation bias repackaged as a character virtue. It assumes that what you started should be finished, which is exactly the question the bias keeps you from asking. "Think before you act" assumes the thinking was sound, and once you've thought and decided, the decision has inertia. The problem was never acting without thinking. It's acting without *reconsidering*.
+Our own advice makes it worse. "Finish what you started" is plan continuation bias repackaged as a character virtue. It assumes that what you started should be finished, which is exactly the question the bias keeps you from asking. That isn't the Kanban rule of limiting work in progress, which stops new work from starting and says nothing about whether the current work is right. "Think before you act" assumes the thinking was sound, and once you've thought and decided, the decision has inertia. The problem was never acting without thinking. It's acting without *reconsidering*.
 
 ## The Impulse Shows Up at Every Stage
 
@@ -74,7 +74,7 @@ Sometimes getting it working first is the right test, because some approaches ca
 
 Proving asks "can I make this work?" and the answer is almost always yes given enough effort. Testing asks "should I be making this work?" and that's the question alignment depends on. The impulse turns testing into proving.
 
-Tests written after the approach is settled check that the code does what its author intended, and rarely whether what the author intended is what the need required. A green suite then reads as confirmation of the direction, when all it confirmed was the implementation. Only tests that come from the need before the approach is chosen, such as a check against the business's tolerance for delay, can fail a direction. Without them, the current assumption gets the full weight of implementation and verification, while the alternative gets a hypothetical conversation, maybe, later, if there's time.
+Tests written after the approach is settled check that the code does what its author intended, and rarely whether what the author intended is what the need required. A green suite then reads as confirmation of the direction, when all it confirmed was the implementation. Tests that come from the need before the approach is chosen, such as a check against the business's tolerance for delay, are the ones built to fail a direction. Without them, the current assumption gets the full weight of implementation and verification, while the alternative gets a hypothetical conversation, maybe, later, if there's time.
 
 ## A Team's Momentum Feels Like Validation
 
@@ -86,41 +86,41 @@ This shares something with the bystander effect, where responsibility diffuses u
 
 Questioning the direction doesn't just feel unproductive. It feels like you're slowing the team down, which in most team cultures marks you as the obstacle rather than the one asking the right question. From the inside, speed is indistinguishable from conviction.
 
-The aviation research points the same way. Orasanu's team didn't isolate momentum, but their data does show social pressure feeding the bias. Alongside ambiguous conditions, they named organizational and socially-induced goal conflicts as the second context that contributes to plan-continuation errors. So the group is more than a second instance of the bias. It's one of the conditions that feed it.
+Orasanu's team didn't isolate momentum, but their data does show social pressure feeding the bias. Alongside ambiguous conditions, they named organizational and socially-induced goal conflicts as the second context that contributes to plan-continuation errors. So the group is more than a second instance of the bias. It's one of the conditions that feed it.
 
 ## Process Decides Which Direction Is Free
 
-Every method for keeping work aligned assumes that when discovery arrives, someone will notice and act. None of them do the registering for you.
+Most methods for keeping work aligned assume that when discovery arrives, someone will notice and act. None of them do the registering for you.
 
-### Fixed-Scope Intervals Put Correction at the Far End
+### Fixed Intervals Put Correction at the Far End
 
-Any cadence that commits a group to a fixed set of work for a fixed window places the routine moment for changing direction at the end of that window. In a two-week sprint, the review is the official place to say the plan was wrong, and by the time it arrives two weeks of sunk cost have accumulated. The correction point sits exactly where the bias is strongest.
+Any cadence that commits a group to a fixed goal or set of work for a fixed window places the routine moment for changing direction at the end of that window. In a two-week sprint, the review is the official place to say the plan was wrong, and by the time it arrives two weeks of sunk cost have accumulated. The correction point sits exactly where the bias is strongest.
 
-Scrum is not blind to this. The Scrum Guide lets the team renegotiate scope with the Product Owner as more is learned, lets a Product Owner cancel a sprint, and makes the sprint boundary itself a replanning point. But renegotiation and cancellation are levers someone has to decide to pull, which is the very decision the bias suppresses. And the daily standup, as many teams run it, has each person report progress against work already committed, which quietly rewards continuation every morning. It is part of what the framework trades for predictability.
+Scrum is not blind to this. The Scrum Guide fixes the Sprint Goal rather than the scope, and the Daily Scrum adapts the plan toward that goal every day. A Product Owner can cancel a sprint, and the sprint boundary itself is a replanning point. But daily adaptation serves the goal rather than questioning it, and cancellation is a lever someone has to decide to pull, which is the very decision the bias suppresses. The standup, as many teams run it, has each person report progress against work already committed, which quietly rewards continuation every morning. It is part of what the framework trades for predictability.
 
 ### Some Processes Make Stopping the Default
 
 Basecamp's Shape Up is organized around three moves that make a discovery cheaper to act on. A circuit breaker means unfinished work expires by default instead of receiving an extension, so stopping requires no argument from anyone. An appetite fixes the time and varies the scope, which makes dropping part of a plan an ordinary decision rather than an admission of failure. Shaping before committing means less has been invested at the moment the "this isn't right" signal arrives, giving the signal a chance to compete with momentum.
 
-A sprint and a circuit breaker are both team-level mechanisms, and they pull in opposite directions. The Scrum Guide returns unfinished work to the backlog, but nothing stops the next planning session from pulling it straight back in. The work already done argues for exactly that, so stopping has to be argued for. The circuit breaker makes expiry the default, so continuing has to be argued for. Shape Up's six-week window is longer than a sprint, so its advantage comes from the default, not from stopping sooner. What matters about a process is which of the two directions it makes free.
+What matters about a process is which direction it makes free, and a sprint and a circuit breaker pull in opposite directions. The Scrum Guide returns unfinished work to the backlog, but nothing stops the next planning session from pulling it straight back in, and the work already done argues for exactly that. Under a sprint, stopping has to be argued for. Under a circuit breaker, expiry is the default, so continuing has to be argued for. Shape Up's six-week window is longer than a sprint, so its advantage comes from the default, not from stopping sooner.
 
-Circuit breakers trip only at defined boundaries, so they miss the smaller discoveries between them, like the "this approach isn't quite right" signal on a Tuesday afternoon that gets overridden by the impulse to finish first.
+Circuit breakers trip only at defined boundaries, so they miss the smaller discoveries between them, like the "this approach isn't quite right" signal on a Tuesday afternoon that the impulse to finish overrides.
 
 ## What Helps When Awareness Isn't Enough
 
 Knowing about the bias doesn't prevent it, because the impulse operates faster than reflection. What worked for me wasn't trying harder to notice. It was changing what I thought the work was. Once each task was a bet on delivering some business value, my approach to it became an assumption about how to deliver that value, and assumptions get tested. A plan you treat as a commitment pulls you toward finishing it. A plan you treat as an assumption pulls you toward checking it. Reframing changes what stopping feels like, but the impulse stays, so the moments to stop still have to come from structure.
 
-### Stopping Is the Cheapest Available Action
+### Checking a Doubt Costs Less Than Building on It
 
 For most people, stopping feels like failure or waste. You were making progress and now you're not. But once a doubt has surfaced, evaluating it is usually cheaper than building more on top of it, and seeing it that way changes the emotional calculus even when the impulse is still there.
 
 ### Low Switching Costs Keep the Signal Audible
 
-The impulse draws power from switching costs that accumulate with every hour of continued execution. The less you've invested, the easier it is to hear the signal telling you to change direction. Cheap experiments before commitment, small commits, well-defined interfaces, and feature flags all keep the cost of being wrong low for as long as possible.
+The impulse draws power from switching costs that accumulate with every hour of continued execution. Cheap experiments before commitment, small commits, well-defined interfaces, and feature flags all keep the cost of being wrong low for as long as possible.
 
 ### A Fixed Rhythm Beats Waiting for Permission
 
-The Pomodoro technique was designed for productivity, but it accidentally created the kind of permission structure this bias requires. Every 25 minutes, you stop. That forced pause is a moment where "am I still working on the right thing?" can be asked without the social or psychological cost that usually prevents reassessment. The technique puts nothing about direction into the break, though, so the pause needs the written switch criterion described below to check against. Events can trigger the same check, like a test that needs a workaround or an estimate that overruns.
+The Pomodoro technique was designed for productivity, but it accidentally created the kind of permission structure this bias requires. Every 25 minutes, you stop. That forced pause is a moment where "am I still working on the right thing?" can be asked without the social or psychological cost that usually prevents reassessment. The technique puts nothing about direction into the break, though, so the pause needs a switch criterion, written in advance, to check against. Events can trigger the same check, like a test that needs a workaround or an estimate that overruns.
 
 The natural objection is that these pauses cost working hours that would otherwise ship something. A check against a criterion written in advance is usually quick, though, and a doubt too big to check quickly deserves the time. Four hours of uninterrupted coding on a misunderstood problem doesn't produce the right solution, and the context-switching argument can't tell that case apart from the one where the four hours were well spent. Breaking focus on work you understood throws away context you had built. Breaking focus on work you hadn't examined throws away nothing you would want to keep.
 
@@ -128,9 +128,9 @@ The natural objection is that these pauses cost working hours that would otherwi
 
 The pause only helps if something happens inside it. The person asking whether to switch is usually the one who made the original decision, and Staw's finding predicts they'll lean toward their own choice. Itamar Simonson and Barry Staw later tested ways to counter that, and one that worked was setting, in advance, a minimum target that triggers a change if it isn't met. So before starting, write down what result, cost, or discovery would make you switch, and which assumptions the plan depends on, so an unexpected discovery has something to contradict.
 
-That puts the criterion before the sunk cost exists and gives every pause something to check against. It also guards the other way, against switching whenever a new idea merely feels better. Then the stop test is three questions for the pause, answered against what you wrote down, ideally by someone who didn't make the original call:
+That puts the criterion before the sunk cost exists and gives every pause something to check against. It also guards against the opposite mistake, switching whenever a new idea merely feels better. The stop test is then three questions for the pause, answered against what you wrote down, ideally by someone who didn't make the original call:
 
-- **Am I proving or testing?** Proving asks whether this can be made to work. Testing asks whether it should be.
+- **Am I proving or testing?** Can this be made to work, or should it be?
 - **Is switching getting more expensive while I keep going?** Compare what you would throw away by switching now with what you would have thrown away an hour ago. If that pile keeps growing while the doubt sits unresolved, you are building the sunk cost that will later argue against switching.
 - **If I hadn't already started, would I choose this approach today?** This is Peter Drucker's question from The Effective Executive, "If we did not already do this, would we go into it now?", scaled down from a program to a single task. A no here is the entire signal. Everything after it is negotiation with sunk cost.
 
@@ -138,4 +138,10 @@ That puts the criterion before the sunk cost exists and gives every pause someth
 
 You can't realign after discovery if you can't stop long enough to receive the discovery. You can't weigh a tradeoff you never paused to see, or catch a risk while you're busy proving the approach works. Alignment isn't something you achieve at kickoff. You recover it at every plan, discovery, commit, and test, and each recovery starts with a stop.
 
-So the work isn't only to try harder at noticing. The work is to arrange things so that stopping doesn't wait on noticing: rhythms that pause whether or not anything looks wrong and check against criteria set before the work began, boundaries that expire on their own, commitments small enough that changing your mind costs less than defending it. Build those, and the moment you would otherwise have missed arrives on a schedule that isn't yours to override.
+So the work isn't only to try harder at noticing. The work is to arrange things so that stopping doesn't wait on noticing:
+
+- Rhythms that pause whether or not anything looks wrong, and check against criteria set before the work began
+- Boundaries that expire on their own
+- Commitments small enough that changing your mind costs less than defending it
+
+Build those, and the moment you would otherwise have missed arrives on a schedule that isn't yours to override.
