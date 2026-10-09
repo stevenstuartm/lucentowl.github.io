@@ -48,7 +48,7 @@ When the team that builds and runs the product decides how the code should behav
 
 ## The Standard References Treat Entitlement as a Flag Type
 
-Software delivery consultant Pete Hodgson's catalog of toggle types, published on Fowler's site, sets permissioning toggles beside release, experiment, and ops toggles. Permissioning toggles change "the features or product experience that certain users receive." Hodgson notes these "may be very-long lived compared to other categories of Feature Toggles - at the scale of multiple years."
+Pete Hodgson's catalog of toggle types, published on Fowler's site, sets permissioning toggles beside release, experiment, and ops toggles. Permissioning toggles change "the features or product experience that certain users receive." Hodgson notes these "may be very-long lived compared to other categories of Feature Toggles - at the scale of multiple years."
 
 The vendors built the category in. Unleash ships a permanent permission flag type to "control feature access based on user roles or entitlements." LaunchDarkly's entitlements guide treats entitlement flags as permanent ones, which "are part of the everyday operation of the application." A 2020 post on LaunchDarkly's blog by Dawn Parzych goes further: "Instead of creating a custom build for a customer requesting a specific feature, wrap a flag around the feature and release it to that particular customer."
 
@@ -64,21 +64,21 @@ Flag clients are built to never break the application. OpenFeature, a vendor-neu
 
 For an entitlement there's no safe default. LaunchDarkly's entitlements guide warns that if the application can't connect, "all of your end users will receive a single fallback variation." Default to off, and every enterprise customer loses what they bought. Default to on, and every free customer gets it.
 
-An entitlement service can fail too, and a client that starts with nothing cached falls back to one default whichever system holds the grant. The difference is who decides how long a cached grant still counts. LaunchDarkly's offline-mode documentation says a client SDK that can't reach the vendor uses "the latest stored flag variation values." Unless every app build adds its own expiry check, a cancelled customer's device keeps the paid features for as long as it stays offline.
+An entitlement service can fail too. A client that starts with nothing cached falls back to one default, no matter which system holds the grant. The difference is who decides how long a cached grant still counts. LaunchDarkly's offline-mode documentation says a client SDK that can't reach the vendor uses "the latest stored flag variation values." Unless every app build adds its own expiry check, a cancelled customer's device keeps any paid feature that works offline for as long as it stays offline.
 
 An entitlement system makes that an explicit window. RevenueCat, which manages in-app subscriptions, fixes one for every app, so an entitlement active when a device went offline "will remain active for up to three days." A team that owns its entitlements lets the plan owner set it.
 
 ### A Change Log Isn't an Audit Trail
 
-When finance, support, or legal asks why a tenant has a feature, they want the agreement that granted it, when it started, and when it ends. A flag service records that someone added a tenant ID to a segment on a given day.
+When finance, support, or legal asks why a tenant has a feature, they want the agreement that granted it, when it started, and when it ends. A flag service records that someone added a tenant ID to a segment on a given day. Giving sales a role in the flag tool changes who edits, not what's recorded.
 
-Approvals, a comment, and a removal date can sit on that change, but the contract, trial, or sales exception behind it lives in a ticket or a Slack thread, if anywhere. Even a required contract ID is free text the flag service can't validate or query. Asking which tenants had a feature last quarter, and under which agreements, means replaying segment edits. A CRM may hold the contract, but not which features an exception switched on. A segment's history is enough for a rollout but not for a decision with money attached.
+Approvals, a comment, and a removal date can sit on that change, but the contract, trial, or sales exception behind it lives in a ticket or a Slack thread, if anywhere. Even a required contract ID is free text the flag service can't validate or query. Asking which tenants had a feature last quarter, and under which agreements, means replaying segment edits. A segment's history is enough for a rollout but not for a decision with money attached.
 
 ### Billing and Access Drift Apart
 
 Once the flag service decides access, billing knows what customers bought and the flag service knows what they can use, and usually nothing reconciles the two. A downgrade in billing doesn't remove the tenant from the segment, and a sales exception granted in the segment never reaches billing. Schematic is an entitlement platform vendor with an interest in the point. It describes the common path: "many teams use their feature flag tool for entitlements early on, and then realize the two concerns need to be separated as their pricing gets more complex."
 
-LaunchDarkly's guide offers segments that stay in sync with an external system, so billing could feed one, but only if every grant, sales exceptions included, goes into billing first. A separate domain still needs that discipline, but it can enforce it. Billing sends plan changes as events, and the entitlement store refuses any grant with no agreement behind it. A hand-edited segment can't refuse anything. Exceptions and trials start in the entitlement store and flow out to billing.
+LaunchDarkly's guide offers segments that stay in sync with an external system, so billing could feed one, but only if every grant, sales exceptions included, goes into billing first. A separate domain still needs that discipline, but it can enforce it. Billing sends plan changes as events, and the entitlement store refuses any grant with no agreement behind it. Exceptions and trials start in the entitlement store and flow out to billing. A hand-edited segment can't refuse anything.
 
 ## Entitlement Is a Domain With Its Own Owner
 
@@ -88,10 +88,10 @@ It also has its own model of plans that bundle features, contracts that override
 
 | Concern | Entitlement held in a flag service | Entitlement held in its own domain |
 | --- | --- | --- |
-| Who grants access | Engineering edits segments when sales asks | Product and sales grant it, under their own exception policy |
+| Who grants access | Whoever edits segments, checked against nothing | Product and sales grant it, under their own exception policy |
 | What a grant records | Who changed a segment, and when | The agreement behind it, with start and end dates |
-| What a renewal touches | Manual segment edits, since segments carry no contract dates | The contract's dates, once, and every plan feature follows |
-| How billing stays in step | Two systems hold one fact, and neither wins | Billing sends plan changes in, and grants billing never sees, like exceptions, flow out to it |
+| What a renewal touches | Removal dates edited per segment, linked to no contract | The contract's dates, once, and every plan feature follows |
+| How billing stays in step | Two systems hold one fact, and neither wins | Billing sends plan changes in, and exceptions flow out to it |
 | What happens in an outage | On clients, the last stored value with no expiry, or one coded fallback | A fallback and offline window the plan owner sets |
 
 ## One Contract Can Justify a Temporary Flag
@@ -108,7 +108,7 @@ Engineering's usual reason to keep unproven code behind a flag is the ability to
 
 Neither the off switch nor the fallback problem goes away, but both can be accepted on purpose. Making an unproven feature that one contract requires into a plan feature would be premature, and the flag keeps the code isolated until the open question is answered. I think that makes this case a legitimate use of a flag, declared as intentional technical debt and owned by product and sales rather than engineering. The off switch and the outage fallback are now their risks to carry.
 
-Product's ownership means only a product role may change the grant, and its exit trigger is recorded with the contract. If engineering needs an incident kill switch, it's a separate flag whose use product signed off on in advance.
+That ownership means only product or sales may change the grant, and its exit trigger is recorded with the contract. If engineering needs an incident kill switch, it's a separate flag whose use product signed off on in advance.
 
 What separates it from Hodgson's multi-year permissioning toggles is that it has a decision point, due no later than the first renewal, and every way out of that decision removes the flag:
 
@@ -128,13 +128,13 @@ Client apps arguably need flags more than servers do, since a client fix waits o
 
 ### The Vendor's SDK Ties Every Build to the Vendor
 
-The vendor's SDK, and its representation of the answer, become part of every installed build. Swapping vendors waits on app releases, and until old builds disappear, nothing can be put between the client and the vendor. The layer serving the answer isn't yours either, so you can't merge sources, set expiry and invalidation for each kind of data, or push your own change events. I think direct vendor SDK access from client apps is a trap, though many teams accept it for the streaming updates and built-in experiment analysis that come with it.
+The vendor's SDK, and its representation of the answer, become part of every installed build. Swapping vendors waits on app releases, and until old builds disappear, you can't put your own layer between the client and the vendor. The layer serving the answer isn't yours either, so you can't merge sources, set expiry and invalidation for each kind of data, or push your own change events. I think direct vendor SDK access from client apps is a trap, though many teams accept it for the streaming updates and built-in experiment analysis that come with it.
 
-Entitlements in the flag service make that coupling worse. Every build then depends on the vendor for what customers are owed. Exposure gets worse too. LaunchDarkly's secure mode exists because a malicious end user "could use a context or user key to identify what flag values another end user receives," and it covers only its JavaScript-based SDKs. Elsewhere, unless tenant keys are opaque rather than slugs like `acme`, a modified client can probe flags and learn which paid features a named customer holds, even when the server enforces every grant.
+Entitlements in the flag service make that coupling worse. Every build then depends on the vendor for what customers are owed. Exposure gets worse too. LaunchDarkly's secure mode exists because a malicious end user "could use a context or user key to identify what flag values another end user receives," and it covers only its JavaScript-based SDKs. Its other SDKs have no such protection. If tenant keys are readable slugs like `acme`, a modified client can probe flags and learn which paid features a named customer holds, even when the server enforces every grant.
 
 ### A Projection Fixes the Source but Not the Layer
 
-For a team already deep in the hack, a first step back can be fixing where entitlements come from while the flag service keeps serving them. I've used this shape before, with a read store that only receives changes from the audited business store and is never written to directly. The flag service becomes a projection of an entitlement store that sales and product own.
+For a team already deep in the hack, a first step back is fixing where entitlements come from while the flag service keeps serving them. I've used this shape before, with a read store that only receives changes from the audited business store and is never written to directly. The flag service becomes a projection of an entitlement store that sales and product own.
 
 ```text
  ┌──────────────────────────────────┐
@@ -153,7 +153,7 @@ For a team already deep in the hack, a first step back can be fixing where entit
                Client
 ```
 
-That makes LaunchDarkly's synced segment a rule instead of a hope, and two conditions keep the projection honest. Only the sync integration may write to entitlement segments, enforced in the vendor's permissions rather than by agreement, and the whole projection can be rebuilt by replaying the source. It works, but each part is one more thing that can break. It also leaves the device getting grants through the vendor's SDK, with every problem above.
+That makes LaunchDarkly's synced segment, described earlier, a rule instead of a hope, and two conditions keep the projection honest. Only the sync integration may write to entitlement segments, enforced in the vendor's permissions rather than by agreement, and the whole projection can be rebuilt by replaying the source. It works, but the sync and the rebuild can each break. It also leaves the device getting grants through the vendor's SDK, with every problem above.
 
 ### Entitlements Can Ride on an Endpoint You Already Own
 
@@ -172,20 +172,20 @@ The cheaper way out takes grants off the vendor's path entirely, and it may not 
 }
 ```
 
-One number says how often to refresh, and the other says how long a cached answer still counts when a refresh fails. Contract grants change rarely, so hourly is plenty, and an in-app purchase forces a refresh. The plan owner decides grants stay trusted for three days offline. That window is a promise, so data a user creates under a cached grant has to sync even if the grant ended while the device was offline. What happens to that data next is the plan owner's call too. It might stay editable, turn read-only, or wait for a renewal. `generatedAt` lets the client tell how old its copy is, and nothing in the exchange touches the flag vendor.
+One number says how often to refresh, and the other says how long a cached answer still counts when a refresh fails. Contract grants change rarely, so hourly is plenty, and an in-app purchase forces a refresh. The plan owner decides grants stay trusted for three days offline. That window is a promise, so data a user creates under a cached grant has to sync even if the grant ended while the device was offline. What happens to that data next is the plan owner's call too. `generatedAt` lets the client tell how old its copy is, and nothing in the exchange touches the flag vendor.
 
 ### A Facade Decouples Flags From the SDK, as a Separate Choice
 
-Decoupling flags themselves from the SDK can wait. The usual shape is a thin endpoint you own in front of the flag service. It's the kind of server component Sam Newman describes in his backends-for-frontends pattern. The vendor's contract ends at the server. If one endpoint serves both grants and flags, the response should keep them apart, because one flat map of booleans can't tell a release toggle from a contract grant.
+Release flags still come through the vendor's SDK, and moving them can wait. The usual shape is a thin endpoint you own in front of the flag service. It's the kind of server component Sam Newman describes in his backends-for-frontends pattern. The vendor's contract ends at the server. If one endpoint serves both grants and flags, the response should keep them apart, because one flat map of booleans can't tell a release toggle from a contract grant.
 
-Behind a facade, the app takes over recording what each user saw. Statsig's experimentation guidance explains that counting users who never reached a feature dilutes an experiment's result. For a change that lives entirely in the interface, only the client knows the screen rendered.
+The SDK also records who saw each variation, for experiments. Behind a facade, the app takes over that job. Statsig's experimentation guidance explains that counting users who never reached a feature dilutes an experiment's result. For a change that lives entirely in the interface, only the client knows whether the user reached it.
 
 A facade also gives up the vendor's real-time streaming of flag changes, so a client kill switch waits for the next refresh. A change too urgent for that usually belongs on the server. A client-only one, like disabling a crashing native screen, is a reason to keep release flags on the vendor's SDK.
 
 ## A Flag Can Stand In When the Gap Is Written Down
 
-None of this means a startup with one paid tier needs an entitlement service on day one. Yet, I think that holding product access in a flag is still a hack, and the only good reason for it is a timeline or budget that would otherwise block delivery. Even then it's a cost, because paying it off means refactoring the code and migrating the grants. Someone should decide it on purpose and write down three things: that the flag is standing in for an entitlement domain, who owns that gap, and what will trigger paying it off. A good trigger is the first grant no plan explains, such as a sales exception, after which segments hold facts billing doesn't.
+None of this means a startup with one paid tier needs an entitlement service on day one. But I think holding product access in a flag is still a hack, and the only good reason for it is a timeline or budget that would otherwise block delivery. Even then it's a cost, because paying it off means refactoring the code and migrating the grants. Someone should decide it on purpose and write down three things: that the flag is standing in for an entitlement domain, who owns that gap, and what will trigger paying it off. A good trigger is the first grant no plan explains, such as a sales exception, after which segments hold facts billing doesn't.
 
 Unstated, the gap compounds. Each segment and sales exception adds to a later migration. Each client build that reads entitlements from the vendor's SDK adds a contract you can't recall. And the flag service keeps gaining authority because nobody recorded that it was never supposed to have any.
 
-Hacking feature flags can work because each wrong answer is usually recoverable on its own, even as the debt compounds. A tenant who gets a feature a day late complains and gets a credit, though no credit undoes exposing what other customers bought. A different system layer that decides who can sign in, move money, or read another tenant's data has no such margin, and the same shortcut is never an option. A hack can hold together for a while, but the leaks will show and the costs will add up.
+Hacking feature flags can work because each wrong answer is usually recoverable on its own. A tenant who gets a feature a day late complains and gets a credit. No credit undoes exposing what other customers bought, though. A different system layer that decides who can sign in, move money, or read another tenant's data has no such margin, and the same shortcut is never an option. A hack can hold together for a while, but the leaks will show and the costs will add up.

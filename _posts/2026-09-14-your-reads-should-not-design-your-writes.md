@@ -83,7 +83,7 @@ The form often knows, since libraries like Angular's reactive forms and React Ho
 
 Tools that try to recover it each leave a gap. Microsoft's Kiota generator tracks set properties in a backing store, but only for code that writes to the SDK object directly, which a hand-written mapper doesn't. Diffing the loaded document against the outgoing one shows a mapper's defaults as changes the user never made. Only a client that snapshots its own mapped copy at load avoids that.
 
-A client can skip change tracking by sending only the fields its form owns, so the contact form sends `{ displayName, phoneNumber }` and the handler checks which keys are present in the raw JSON. That works while every client scopes its bodies the same way.
+One workaround skips change tracking. Each client sends only the fields its form owns, so the contact form sends `{ displayName, phoneNumber }` and the handler checks which keys are present in the raw JSON. That works while every client scopes its bodies the same way.
 
 But nothing on the server enforces the grouping. The endpoint accepts `isActive` from any caller that includes it. The handler decides field by field who may set what and what each change triggers. And a typed SDK that models the whole customer can lose presence again on the way out. The form scope is the right boundary, held in the wrong place, by convention in each client instead of by the server.
 
@@ -93,7 +93,9 @@ The standards never settled partial updates. RFC 5789, which defined PATCH in 20
 
 JSON Patch, defined in RFC 6902, encodes all four intents explicitly, as add, remove, and replace operations addressed by path. A path into an array is an index, though, so removing `beta` means removing `/tags/1`, which deletes the wrong tag if someone reordered the array first, unless a `test` operation guards it. JSON Merge Patch, from RFC 7396, is simpler and covers three, but replaces arrays whole. Neither can tell a client which fields changed, so adopting one hands every caller the change-tracking problem.
 
-Design guides carry a different risk, because they aren't neutral standards but one company's internal practice, published. Google's API Improvement Proposals already give state changes custom methods, but their field masks are built around protobuf messages and Google's generated clients. The client still has to fill each mask with the fields that changed. A server can pin each mask to one form's fields, but that groups fields by form without giving the group a URL for gateways, logs, and ETags to key on. Even Microsoft doesn't offer its REST API Guidelines as universal. It publishes them hoping other organizations will "create guidelines that are appropriate for them."
+Design guides carry a different risk, because they aren't neutral standards but one company's internal practice, published. Google's API Improvement Proposals do move state changes into custom methods. But their field masks are built around protobuf messages and Google's generated clients. The client still has to fill each mask with the fields that changed. A server can pin each mask to one form's fields, but that groups fields by form without giving the group a URL for gateways, logs, and ETags to key on.
+
+Even Microsoft doesn't offer its REST API Guidelines as universal. It publishes them hoping other organizations will "create guidelines that are appropriate for them."
 
 Those choices fit organizations that own their clients, generate their SDKs, and employ governance teams to enforce conformance. Copied into a team without that, they can become ritual, kept because a large company published them rather than because they solve anything the team has.
 
@@ -128,7 +130,13 @@ Two fields belong in the same writable resource only when they pass all three te
 | `isActive` | Operations | Manage account status | Deactivation checks | `POST /customers/42/deactivate` |
 | `tags` | Support | Manage tags | None | `POST` and `DELETE /customers/42/tags` |
 
-`displayName` and `phoneNumber` pass all three and share a resource. Every other field fails at least one test, so the one wide body becomes these requests:
+`displayName` and `phoneNumber` pass all three and share a resource.
+
+`email` fails only the workflow test, and that's enough. The verification rules then live on the one endpoint that triggers them, and a PUT that resends the current address triggers nothing.
+
+`isActive` fails all three. Changing it is a state transition with its own checks, so it becomes a named operation. A deactivation can no longer ride along with a phone-number change, because there's no body to carry it.
+
+The one wide body becomes these requests:
 
 ```http
 PUT /customers/42/profile
@@ -154,11 +162,7 @@ The server requires every field in each body, so a body that leaves one out fail
 | Leave `phoneNumber` alone | Skip the profile PUT, or resend its current value |
 | Remove one tag | `DELETE /customers/42/tags/beta` |
 
-A mapper can still turn a value into a null the user never chose. That error doesn't vanish, but a screen that loads its section whole limits it to fields the client fetched. Skipping a PUT means tracking which sections were touched, one flag per section rather than per field. Merge Patch on the same small resource would keep leave alone, but only by handing back the field-level tracking the mapper layers lose.
-
-`email` fails only the workflow test, and that's enough. The verification rules then live on the one endpoint that triggers them, and a PUT that resends the current address triggers nothing.
-
-`isActive` fails all three. Changing it is a state transition with its own checks, so it becomes a named operation. A deactivation can no longer ride along with a phone-number change, because there's no body to carry it.
+A mapper can still turn a value into a null the user never chose. That error doesn't vanish, but when a screen loads its section whole, the mapper can only null fields the client fetched. Skipping a PUT means tracking which sections were touched, one flag per section rather than per field. Merge Patch on the same small resource would keep leave alone, but only by handing back the field-level tracking the mapper layers lose.
 
 ### Collections With Identity Get Their Own Addresses
 
@@ -182,7 +186,7 @@ Call count does hurt clients that write in volume, like an offline app syncing a
 
 A single wide update usually applies all or nothing, and separate calls don't, so a save across contact details and tags can fail halfway. As long as the server validates each write against current state, every successful call leaves a valid customer, so a failure leaves an incomplete edit rather than a corrupt record.
 
-Separate calls stop being enough when writes are only valid together. Closing an account deactivates the customer and cancels their subscriptions, and a deactivated customer who's still billed has to be impossible. That's a use case, and it gets a named operation, `POST /customers/42/close`. Rules linking two fields follow the owners. A shipping address needs a postal code, and one owner holds both, so they share a resource. An enterprise tier requires a phone number, but the owners differ. A downgrade that also drops the phone number moves both together, so it gets a named operation. Listing every rule that reads more than one section finds them.
+Separate calls stop being enough when writes are only valid together. Closing an account deactivates the customer and cancels their subscriptions, and a deactivated customer who's still billed has to be impossible. That's a use case, and it gets a named operation, `POST /customers/42/close`. Rules linking two fields follow the owners. A shipping address needs a postal code, and one owner holds both, so they share a resource. An enterprise tier requires a phone number, but the owners differ. A downgrade that also drops the phone number changes both fields together, so it gets a named operation. Listing every rule that reads more than one section finds these cases.
 
 The wide update never removed those actions. It hid them in field values, so `"isActive": false` is a deactivation command the handler detects by comparing against the stored value. Naming them isn't a return to RPC, the endpoint-per-action style that resource-oriented APIs replaced. A normalized surface is still mostly GET and PUT on resources, with named operations kept for transitions, the way Stripe's API finalizes invoices and GitHub's API merges pull requests. An operation earns a name when the business needs its writes to succeed together, not when a screen happens to save several things at once.
 
@@ -192,13 +196,13 @@ If one agent changes `displayName` while another changes `phoneNumber`, two PUTs
 
 The usual guard is a version check. A GET on the profile returns a version tag in its `ETag` header, and the client sends that tag back in an `If-Match` header on the PUT. If the resource changed in between, the server answers `412 Precondition Failed` instead of overwriting. An edit screen loads each section from its own GET, so it resends that resource's own representation and version. A server that requires the header answers a missing one with `428 Precondition Required`, defined in RFC 6585.
 
-Small resources make that check practical. On the wide customer, a tag another agent adds fails every save that loaded the customer before it. A batch replaying a day of offline edits gets 412s on its stale entries to refetch and reapply, which is where offline-first apps may need field merging. Otherwise, a 412 on the profile means someone changed the same details at the same time, which is rare and should reach the user.
+Small resources make that check practical. On the wide customer, a tag another agent adds fails every save that loaded the customer before it. A batch replaying a day of offline edits gets 412s on its stale entries to refetch and reapply, which is where offline-first apps may need field merging. Outside offline sync, a 412 on the profile means someone changed the same details at the same time, which is rare and should reach the user.
 
 ### Adding a Writable Field Changes the Contract
 
-If `preferredName` joins the profile, an older client's PUT leaves it out, and the server either clears it or rejects the request. So the field comes with a new version of the resource, which each request declares. Older clients keep sending the old version's request, and the server leaves `preferredName` alone for those.
+If `preferredName` joins the profile, an older client's PUT leaves it out, and the server either clears it or rejects the request. So the field comes with a new version of the resource, which each request declares in its path or media type. Older clients keep sending the old version's request, and the server leaves `preferredName` alone for those.
 
-A partial update skips the version by treating missing as leave alone, the rule that stopped the phone number from being cleared. Normalizing limits versions instead, because reads gain fields freely and a field with its own owner, scope, or workflow gets its own resource. A resource that still gains writable fields every release may be better served by partial updates. For the rest, the versions that remain are the price of a body the server never guesses about.
+A partial update skips the version by treating missing as leave alone, the rule that stopped the phone number from being cleared. Normalizing limits versions instead. Reads gain fields freely, and a field with its own owner, scope, or workflow gets its own resource. A resource that still gains writable fields every release may be better served by partial updates. For the rest, the versions that remain are the price of a body the server never guesses about.
 
 ### Migration Runs Alongside the Wide Write
 
