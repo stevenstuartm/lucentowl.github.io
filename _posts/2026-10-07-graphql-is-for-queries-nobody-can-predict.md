@@ -66,27 +66,39 @@ sources:
     url: "https://engineering.fb.com/2022/11/15/open-source/sapling-source-control-scalable/"
 ---
 
-Facebook's 2015 engineering post introducing GraphQL explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The line most people quote from that post, that "the shape of the returned data is determined entirely by the client's query," is true, but it's a consequence of the graph, not the reason GraphQL exists. No server team can design an endpoint for every path through a graph that size, so the client has to write the query.
+Facebook's 2015 engineering post introducing GraphQL explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The line most people quote from that post is that "the shape of the returned data is determined entirely by the client's query." That's true, but it's a consequence of the graph, not the reason GraphQL exists. No server team can design an endpoint for every path through a graph that size, so the client has to write the query.
 
 GraphQL solved Facebook's problem, and the burden of proof sits with everyone importing it to show that it solves theirs. I don't think most teams can meet it.
 
-Take away every benefit a team can get without GraphQL, and one thing is left: a client composing its own traversal of a graph the server can't predict. GraphQL's own best practices then steer private APIs away from it, toward operations registered ahead of time, often called persisted queries. That registry lists every query the team's clients will send, so runtime control is gone, as at Facebook. What's left is the client team writing its own operations, a need that planning across teams often removes. Where it doesn't, a backend for the team's screens keeps each operation designed, so a team needs GraphQL only if its graph needs new operations faster than any server team could design them, as Facebook's did.
+Most of what teams adopt GraphQL for is available without it. Take those benefits away and one thing is left: a client composing its own traversal of a graph the server can't predict.
+
+GraphQL's own best practices then steer private APIs away from even that. They recommend registering every operation ahead of time as a persisted query, so the server knows each query before it runs.
+
+The registry still lets a client team write its own operations, just not at runtime. Planning across teams often removes that need, and where it doesn't, a backend for the team's screens gives it that freedom with each operation still designed. A team needs GraphQL only if its graph needs new operations faster than any server team could design them, as Facebook's did.
 
 ## Most of GraphQL's Benefits Aren't GraphQL's
 
-The case for adopting GraphQL usually arrives as a bundle of typed contracts, payloads shaped to each screen, flexible filtering, declarative authorization, one endpoint over many services, and frontends that don't wait on backends. The test for each is whether it needs the client to compose the operation.
+The case for adopting GraphQL usually arrives as a bundle: typed contracts, payloads shaped to each screen, flexible filtering, declarative authorization, one endpoint over many services, and frontends that don't wait on backends. For each, the test is whether it needs the client to compose the operation. Most don't.
 
 ### Typed Contracts and Codegen Come From Contract-First APIs
 
-A GraphQL schema gives clients types and generated code, as an OpenAPI document does for HTTP APIs and a Protocol Buffers definition does for gRPC. In contract-first development, the team designs and publishes each operation on purpose, so the contract states what the service commits to. A GraphQL schema publishes types and entry points, and the operations that matter, meaning which fields combine at what depth, get written later by whoever calls it. Without a registry, the schema commits the service to every operation its types and limits allow.
+A GraphQL schema gives clients types and generated code, as an OpenAPI document does for an HTTP API and a Protocol Buffers definition does for gRPC. What differs is what the contract commits the service to.
+
+In contract-first development, the team designs and publishes each operation on purpose, so the contract states what the service supports. A GraphQL schema publishes types and entry points instead. The operations that matter, meaning which fields combine at what depth, get written later by whoever calls it. Without a registry, the schema commits the service to every operation its types and limits allow.
 
 ### Filtering and Sorting Are the Server's Choice, Not a Query Language
 
-Hot Chocolate, a GraphQL server for .NET and the best-designed one I've used, adds filtering, sorting, and paging to a list with an attribute or two. But each attribute is a server decision about which lists callers may filter, on which fields, and how far they may page, the same decisions an endpoint makes about its query parameters. OData, an OASIS standard for REST APIs, defines those parameters as `$filter`, `$orderby`, `$top`, and `$skip`, and ASP.NET Core supports them. OData's `$expand` and `$select` let clients compose traversals, which brings back GraphQL's cost problem unless the server limits them. In GraphQL or REST, the client fills in only the parameters the server allowed.
+Hot Chocolate, a GraphQL server for .NET and the best-designed one I've used, adds filtering, sorting, and paging to a list with an attribute or two. But each attribute is the server choosing which lists callers may filter, on which fields, and how far they may page.
+
+An endpoint makes the same choices about its query parameters. OData, an OASIS standard for REST APIs, standardizes those parameters as `$filter`, `$orderby`, `$top`, and `$skip`, and ASP.NET Core supports them. In GraphQL or REST, the client fills in only the parameters the server allowed.
 
 ### Field-Level Authorization Is a Cost of Client-Written Operations
 
-Apollo's GraphQL router offers `@authenticated` and `@requiresScopes` directives, and Hot Chocolate's `[Authorize]` attribute runs the same roles and policies ASP.NET Core applies to an endpoint, so the policy engine isn't GraphQL's. The placement is. An endpoint is a designed operation, so its logic knows what the caller is doing and can delegate each conditional check to the component that owns the rule. A root mutation field is designed like an endpoint, but a read reaches a field through any path a caller writes. A support agent may see a customer's email while working that customer's ticket but not in a sales report the agent can also open, and each endpoint knows which one it serves. In GraphQL the same `Customer.email` field sits under both, so its rule has to inspect the path the caller wrote. A ticket-specific customer type fixes that by designing the operation back into the schema, which is what the endpoint already did. The GraphQL Foundation tells production codebases to "delegate authorization logic to the business logic layer."
+The policy engine behind GraphQL authorization isn't GraphQL's. Apollo's router offers `@authenticated` and `@requiresScopes` directives, and Hot Chocolate's `[Authorize]` attribute runs the same roles and policies ASP.NET Core applies to an endpoint. What GraphQL changes is where the check has to sit.
+
+An endpoint is a designed operation, so its code knows what the caller is doing and can apply the rule that fits. A root mutation field is designed the same way, but a read can reach a field through any path a caller writes.
+
+Say a support agent may see a customer's email while working that customer's ticket, but not in a sales report the agent can also open. Each endpoint knows which one it serves. In GraphQL, the same `Customer.email` field sits under both, so its rule has to inspect the path the caller wrote. A ticket-specific customer type would fix that, but only by designing the operation back into the schema, which is what the endpoint already did. The GraphQL Foundation tells production codebases to "delegate authorization logic to the business logic layer."
 
 ### One Endpoint Over Many Services Fights the Teams Behind It
 
@@ -94,27 +106,37 @@ Apollo Federation and Hot Chocolate's Fusion put one GraphQL endpoint in front o
 
 The stitching a client would have done still happens, in a query planner where the fetches are harder to see. Apollo's query-plan documentation says the router runs subgraph fetches in sequence "whenever one subgraph's response depends on data that first must be returned by another subgraph."
 
-A product built around bounded contexts gives each team authority over its own model. A federated schema asks every team to contribute types to one shared graph, extend each other's entities, and pass a composition check that any other team's change can fail. With one graph version, a subgraph can only add and deprecate fields, where a domain API can ship a breaking version beside the old one. The bounded contexts are still there, but the schema pretends they aren't.
+A product built around bounded contexts gives each team authority over its own model. A federated schema asks for the opposite. Every team contributes types to one shared graph, extends other teams' entities, and passes a composition check that any other team's change can fail. With one graph version, a subgraph can only add and deprecate fields, where a domain API can ship a breaking version beside the old one. The bounded contexts are still there, but the schema pretends they aren't.
 
-A backend-for-frontend looks like the same facade but points the other way. Sam Newman describes it as a backend dedicated to one user experience and owned by the team building that interface. A backend-for-frontend calls the domains' own contracts like any client, so authority stays where it was, and its fan-out sits in code its team wrote and can reshape against its latency budget. It also shapes each response to its screens, avoiding over-fetching.
+A backend-for-frontend looks like the same facade but points the other way. Sam Newman describes it as a backend dedicated to one user experience and owned by the team building that interface. It calls each domain's contract like any client, so authority stays with the domains. Its fan-out sits in code its team owns and can tune, and it shapes each response to its screens, so clients don't over-fetch.
 
-Members of my team once proposed a single query endpoint over our services, and I rejected the prototype we built. It added too much latency for our data-heavy, highly responsive web app, and caching fought it too. Each domain, and often each kind of record, had its own TTL, so one response mixing lifetimes defeated a request-level cache, and caching per source meant streaming every domain's invalidations into a gateway no domain team owned. What worked was each layer caching the data it owned.
+Members of my team once proposed a single query endpoint over our services, and I rejected the prototype we built. It added too much latency for our data-heavy, highly responsive web app, and it fought our caching. Each domain, and often each kind of record, had its own TTL. One response mixing those lifetimes defeated a request-level cache, and caching per source meant streaming every domain's invalidations into a gateway no domain team owned. What worked was each layer caching the data it owned.
 
-One product doesn't prove a rule, and a backend-for-frontend's fan-out pays the same network hops, so the lasting case is ownership. A product without our volatile data, varied lifetimes, and team per bounded context might find a federated graph harmless.
+One product doesn't prove a rule. A backend-for-frontend's fan-out pays the same network hops, so latency isn't the lasting case against federation. Ownership is. A product without our volatile data, varied cache lifetimes, and team per bounded context might find a federated graph harmless.
 
 ### Fragment Colocation Needs GraphQL but Solves a Team Problem
 
-Relay, Meta's GraphQL client for React, is built around colocated fragments, with each component declaring the data it needs and the compiler nesting those fragments into the queries a screen sends. The best defense of persisted queries says the unpredictability hasn't gone away but moved from runtime to development time, because the server team can't predict what the frontend will need next month.
+Relay, Meta's GraphQL client for React, is built around colocated fragments. Each component declares the data it needs, and the compiler nests those fragments into the queries a screen sends. GraphQL's defenders build on this, arguing that even when every query is registered ahead of time, the unpredictability hasn't gone away. It has moved from runtime to development time, because the server team can't predict what the frontend will need next month.
 
-What colocation buys is frontend convenience, and it pays for that with intentional contracts. A normalized client store is the same convenience and works over designed responses too. The need colocation serves, a frontend team that can't wait on a backend team, is a planning failure before it's a technical one. Most of a screen's data needs are known when the screen is planned, and leads who set priorities across teams can schedule its endpoint in the same release. The case for the technology rests on one premise, that the teams can't plan together, and that premise is a needle holding up a foundation, unless the screens fail the first question below, as Facebook's did. Adopting a tool because it removes a symptom, then collecting reasons it fits, invites confirmation bias. Choosing it on purpose means proving its security, performance, stability, and testability against the problem at hand, and slowing down to plan together is how a product speeds up.
+Colocation buys frontend convenience, and it pays for it with intentional contracts. The need it serves, a frontend team that can't wait on a backend team, is a planning failure before it's a technical one. Most of a screen's data needs are known when the screen is planned, and leads who set priorities across teams can schedule its endpoint in the same release.
 
-Where planning can't keep pace, as when a screen changes mid-build or an experiment varies it, the fix is an ownership change. Colocation already gives the frontend team its operations, and a backend-for-frontend gives it the code behind them. Say a listing card on web, iOS, and Android gains its seller's rating. With colocation, each client edits a fragment and its build registers a new document. With a backend-for-frontend, each client team adds the field to its own backend's response in the same release, and old app versions ignore a field they never read. Neither waits on a domain team unless the rating doesn't exist yet, and then both do. Its price, which GraphQL avoids, is a backend per platform with its own pipeline and on-call, though Newman allows one shared backend when iOS and Android screens match. GraphQL does save backend development time, one endpoint edit per platform's backend. So do plenty of lapses in discipline, and saved time isn't a benefit until it's weighed against what it leaves behind, here an operation no server code was written for. The schema's resolvers run it without knowing which screen it serves, so its authorization can't tell a ticket from a sales report without per-document rules, and it can't open to a partner without a cost model. A backend-for-frontend's endpoint settles each of those in code its team owns.
+So the case for the technology rests on one premise, that the teams can't plan together, and that premise is a needle holding up a foundation.
+
+Adopting a tool because it removes a symptom, and then collecting reasons it fits, invites confirmation bias. Choosing it on purpose means proving its security, performance, stability, and testability against the problem at hand. Slowing down to plan together is how a product speeds up.
+
+Planning can't always keep pace, as when a screen changes mid-build or an experiment varies it. Then the frontend team needs to own its operations, and a backend-for-frontend can give it that as well as colocation can.
+
+Say a listing card on web, iOS, and Android gains its seller's rating. With colocation, each client edits a fragment and its build registers a new document. With a backend-for-frontend, each client team adds the field to its own backend's response in the same release. Neither waits on a domain team unless the rating doesn't exist yet, and then both do.
+
+Each fix has a price. A backend-for-frontend needs a backend per platform, each with its own pipeline and on-call. Colocation avoids that and saves an endpoint edit per backend. But plenty of lapses in discipline save time too, and colocation's saved time isn't a benefit until it's weighed against what it leaves behind.
+
+What colocation leaves behind is an operation no server code was written for, which carries the authorization problem above and the partner problem below. A backend-for-frontend's endpoint settles both in code its team owns.
 
 ## What's Left Is a Graph Nobody Can Predict
 
 GraphQL started in 2012, when Facebook began rebuilding its iOS and Android apps. Native apps needed "an API data version of News Feed," and where a REST service "may require multiple round-trips," "GraphQL naturally follows relationships between objects."
 
-Every item in a feed links to its author, its comments, the people who commented, and the groups and pages it came from, and a reader can follow any of those links to the next view. That data also changes constantly. A designed feed endpoint would have to return every relationship any screen on any client version might open next, or come in a variant per screen and version. Facebook passes every test I can think of, and I agree with its conclusion.
+Every item in a feed links to its author, its comments, the people who commented, and the groups and pages it came from. A reader can follow any of those links to the next view. That data also changes constantly. A designed feed endpoint would have to return every relationship any screen on any client version might open next, or come in a variant per screen and version. Facebook passes every test I can think of, and I agree with its conclusion.
 
 ### REST Follows One Link at a Time, GraphQL Follows Many
 
@@ -128,45 +150,56 @@ The round trips Facebook described are what REST does by design. Roy Fielding's 
 
 Most APIs called REST today sit in the third row. They're RPC, designed operations over HTTP or gRPC, often with REST's disciplines but not its hypermedia.
 
-Two questions test, screen by screen, whether a product outruns its server teams. Does each item in a list summarize itself and open one detail view, rather than link into many of its relationships? Does the data behind those views change slowly enough for a designed endpoint to serve and cache it? If both answers are yes for most screens, hand-written endpoints can keep pace. A marketplace's listing and detail screens pass both, since a listing is read far more often than it changes. Volatile data matters only alongside the first failure, when every relationship a designed endpoint returns just in case is fetched fresh.
+Two questions test, screen by screen, whether a product outruns its server teams:
+
+1. Does each item in a list summarize itself and open one detail view, rather than link into many of its relationships?
+2. Does the data behind those views change slowly enough for a designed endpoint to serve and cache it?
+
+If both answers are yes for most screens, hand-written endpoints can keep pace. A marketplace's listing and detail screens pass both, since a listing is read far more often than it changes. Volatile data alone doesn't sink a designed endpoint. Volatility hurts when a screen also fails the first question, because every relationship the endpoint returns just in case then has to be fetched fresh rather than cached.
 
 ### GitHub, Agents, and Graph Databases Face Unpredictable Queries
 
-GitHub's repositories, issues, pull requests, users, and organizations form a graph that callers traverse in ways GitHub can't predict. Over a graph database such as Neo4j, GraphQL is a thin layer on a graph model. Neo4j's GraphQL Library compiles each operation into "a single Cypher query which is executed against the database."
+GitHub's repositories, issues, pull requests, users, and organizations form a graph that callers traverse in ways GitHub can't predict. Over a graph database such as Neo4j, GraphQL is a thin layer on a graph model, and Neo4j's GraphQL Library compiles each operation into "a single Cypher query which is executed against the database."
 
-AI agents compose queries as they go, so they would be GraphQL's best fit, yet most advice points them toward designed tools. Anthropic's general guidance on agent tools recommends "a few thoughtful tools targeting specific high-impact workflows." Apollo's Model Context Protocol server, which exposes GraphQL as agent tools, offers an open `execute` tool but steers developers toward governing what agents reach "by adopting predefined persisted queries." Predefining an agent's queries gives up the reason to expose a graph to it, and those operations could just as well be RPC endpoints.
+AI agents compose queries as they go, which should make them GraphQL's best fit, yet most advice points them toward designed tools. Anthropic's agent-tool guidance recommends "a few thoughtful tools targeting specific high-impact workflows." Apollo's Model Context Protocol server, which exposes GraphQL as agent tools, offers an open `execute` tool but steers developers toward governing what agents reach "by adopting predefined persisted queries." Predefining an agent's queries gives up the reason to expose a graph to it, and those operations could just as well be RPC endpoints.
+
+## GraphQL's Own Best Practices Steer Private APIs Away From the Point
 
 ### Open Queries Can Be Secured Without a Registry
 
-When callers write their own queries, every caller does, because the endpoint shows in the browser's network tab and the schema is often one introspection query away. A query like `users(first: 100) { friends(first: 100) { friends(first: 100) { name } } }` asks for a million records. Aliases let one request call a login mutation a hundred times, which a per-request rate limiter counts as one attempt, as a PortSwigger Web Security Academy lab teaches.
+A server that accepts queries its clients write accepts them from anyone, because the endpoint shows in the browser's network tab and the schema is often one introspection query away. A query like `users(first: 100) { friends(first: 100) { friends(first: 100) { name } } }` asks for a million records. Aliases let one request call a login mutation a hundred times, and a per-request rate limiter counts that as one attempt, as a PortSwigger lab shows.
 
-The GraphQL Foundation's security guidance recommends limiting query depth, applying "a separate smaller limit to how deeply lists can be nested," capping operations per batch, and restricting aliases. Cost analysis prices the rest, weighting each field and charging for what a query could return rather than for the request that carried it, so a hundred aliased logins cost a hundred mutations.
+The GraphQL Foundation's security guidance recommends limiting query depth, applying "a separate smaller limit to how deeply lists can be nested," capping operations per batch, and restricting aliases. Cost analysis prices the rest. It weights each field and charges for what a query could return rather than for the request that carried it, so a hundred aliased logins cost a hundred mutations.
 
-GitHub caps a call at 500,000 nodes and meters each user at 5,000 points an hour, scored by the connections a query could traverse. Shopify's Admin API scores each query from its fields before running it and rejects any over 1,000 points. The price is a cost model the server tunes field by field as the schema grows, which is the work an allowlist avoids.
-
-## GraphQL's Own Best Practices Steer Private APIs Away From the Point
+GitHub caps a call at 500,000 nodes and meters each user at 5,000 points an hour, scored by the connections a query could traverse. Shopify's Admin API scores each query from its fields before running it and rejects any over 1,000 points. The price is a cost model the server tunes field by field as the schema grows, and that tuning is the work an allowlist avoids.
 
 ### Trusted Documents Are for First-Party APIs Only
 
 With persisted queries, the client's operations are hashed and registered at build time, and in production the client sends only the hash. Relay, Hot Chocolate's `OnlyAllowPersistedDocuments` option, Apollo's safelisting, and the GraphQL Foundation's "trusted documents" describe the same arrangement.
 
-Benjie Gillam, a GraphQL Working Group contributor, calls an allowlist "very much a best practice" for the "vast majority of GraphQL users." The GraphQL Foundation says "trusted documents can't be used for public APIs." A private API gives up the open, cost-limited mode that a graph nobody can predict justifies.
+Benjie Gillam, a GraphQL Working Group contributor, calls an allowlist "very much a best practice" for the "vast majority of GraphQL users." The GraphQL Foundation adds that "trusted documents can't be used for public APIs." So for a private API, the recommended practice gives up open queries, the one thing a graph nobody can predict needs GraphQL for.
 
 ### Serving Partners Brings Back the Cost Model
 
-In my experience, what starts private often has to interoperate with a partner integration, another department, or a customer who wants their data, and some of those consumers expect HTTP conventions, such as per-resource URLs and HTTP caching. For every GraphQL endpoint I built, I ended up needing a more RESTful one beside it. A designed contract can often open to outsiders behind auth and rate limits, because each operation's cost is already known, but the locked-down GraphQL API can't serve them as built, and registering partners' operations makes the server team write them, as a designed endpoint would. Opening it, or a second open surface, takes on the cost limits and field weights the registry was there to avoid.
+In my experience, what starts private often has to interoperate later, with a partner integration, another department, or a customer who wants their data. Some of those consumers expect HTTP conventions, such as per-resource URLs and HTTP caching. For every GraphQL endpoint I built, I ended up needing a more RESTful one beside it.
+
+A designed contract can often open to outsiders behind auth and rate limits, because each operation's cost is already known. The locked-down GraphQL API can't serve them as built. Registering partners' operations makes the server team write them anyway, and a gateway translating them only moves those endpoints into infrastructure no domain team owns. Opening the API, or adding a second open surface beside it, takes on the cost limits and field weights the registry was there to avoid.
 
 ### Persisted Queries Carry the Costs of Both Models
 
-The client team composes each operation, but it can't send anything the server hasn't stored, so the client isn't in control. The server runs each operation, bounds it with its schema, and can refuse documents, but it doesn't choose which fields combine in a request. Both teams run the registry, which ties each field to the builds that read it, which makes deprecation safe, its clearest advantage with long-lived mobile apps, and a backend-for-frontend matches it only by versioning responses per release. Registration in CI keeps attackers' queries out, but only review keeps out a costly one a client team wrote.
+Under persisted queries, the client team composes each operation, but it can't send anything the server hasn't stored. The server runs each operation, bounds it with its schema, and can refuse documents, but it doesn't choose which fields combine in a request.
+
+Both teams run the registry. Its clearest advantage is that it ties each field to the builds that read it, which makes deprecation safe, especially with long-lived mobile apps. A backend-for-frontend matches that only by versioning responses per release. Registration in CI keeps attackers' queries out, but only review keeps out a costly query a client team wrote.
 
 ### A Monorepo Makes the Registry Cheaper
 
-Gillam's write-up says the allowlist practice "has been used within Facebook since before GraphQL was open sourced." So Facebook knew its queries before they ran, but its client build generated a list no server team could have written by hand.
+Gillam's write-up says the allowlist practice "has been used within Facebook since before GraphQL was open sourced." So Facebook did know its queries before they ran. Its client build generated the list, though, and no server team could have written it by hand.
 
-And Facebook's code lives largely in one repository, which Meta's post on its Sapling source control system puts at "tens of millions of files." Meta hasn't written that its persisted queries depend on that, but my reading is that they benefit from it. When client, compiler, and registry change in one commit, the hash is a detail of one build rather than a contract between two teams. Where client and server ship from separate repositories, each client release must reach the registry before it reaches users, or the server rejects its queries, and every registered document is one team's code that another team runs, reviewed or not.
+Facebook's code also lives largely in one repository, which Meta's post on its Sapling source control system puts at "tens of millions of files." Meta hasn't said its persisted queries depend on that, but I read them as benefiting from it. When client, compiler, and registry change in one commit, the hash is a detail of one build rather than a contract between two teams.
 
-Without a graph like Facebook's, making every client team's release depend on a hash registry, so a private API can keep a query language it has locked down, is forcing a square block into a round hole.
+Where client and server ship from separate repositories, the registry becomes that contract. Each client release must reach the registry before it reaches users, or the server rejects its queries. And every registered document is one team's code that another team runs, reviewed or not.
+
+Without a graph like Facebook's, that registry exists only so a private API can keep a query language it has locked down. Making every client team's release depend on it is forcing a square block into a round hole.
 
 ## Choose Who Controls the Operation
 

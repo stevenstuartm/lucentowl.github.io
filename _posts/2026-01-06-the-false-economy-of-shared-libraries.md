@@ -64,15 +64,19 @@ The shared library pitch assumes a homogeneous technology landscape that rarely 
 
 If two services genuinely need the same function, you have three possibilities:
 
-**It's a cohesion problem.** That function belongs in one place and should be called, not duplicated. Extract it into a service with an API. Now there's a clear owner, a clear contract, and no shared implementation coupling consumers together. A service isn't free. It adds a network hop, an availability dependency, and an API to version, but the owner carries the versions. A fix to any version ships in one deployment, and a bad release is one canary to catch and one rollback to undo, where a library regression ships in every consumer's next release. Waiting on a service owner is still waiting, but it ends in one deployment instead of a release plus every consumer's upgrade.
+**It's a cohesion problem.** That function belongs in one place and should be called, not duplicated. Extract it into a service with an API. Now there's a clear owner, a clear contract, and no shared implementation coupling consumers together. A service isn't free. It adds a network hop, an availability dependency, and an API to version. But the owner carries those versions, not every consumer. A fix ships in one deployment, and a bad release is one canary to catch and one rollback to undo. A library regression, by contrast, ships in every consumer's next release.
 
 **It's a coupling problem.** You've drawn your boundaries wrong. The services that "need" the same code are actually more related than you thought. Reconsider where the boundary belongs rather than papering over the boundary violation with a shared dependency.
 
-**It's genuinely independent.** The similarity is coincidental. Both services need to format dates or parse JSON or validate email addresses. Copy the code. Move on. The copies can drift, and a copied bug gets fixed once per copy, but for small code that rarely changes that's cheaper than the coordination, and each copy can evolve with its service. When every copy needs the same fix, each team ships it without waiting on anyone. Copies don't show up in a dependency scanner, though, so parsing and validation should come from the runtime or a mature library, with only the glue copied. The test is whether two copies disagreeing would produce an inconsistency a user or the data could see. A rule that must produce the same answer everywhere, like a tax calculation, fails that test. It's the cohesion case, and it needs one owner.
+**It's genuinely independent.** The similarity is coincidental. Both services need to format dates or parse JSON or validate email addresses. Copy the code. Move on. The copies can drift, and a copied bug gets fixed once per copy, but for small code that rarely changes that's cheaper than the coordination, and each copy can evolve with its service. Copies don't show up in a dependency scanner, though, so what you copy should be the glue around the runtime or a mature library, not a hand-rolled parser or validator.
+
+Copying has a limit. The test is whether two copies disagreeing would produce an inconsistency a user or the data could see. A rule that must produce the same answer everywhere, like a tax calculation, fails that test. It's the cohesion case, and it needs one owner.
+
+The common rebuttal is "but if there's a bug, I fix it once and it propagates everywhere." The answer depends on where the bug lives. Bugs in third-party libraries get fixed upstream on the vendor's cycle, and you take the fix by upgrading. Concerns like logging and observability shouldn't be blindly shared implementations. A service **authors** them out of its own domain knowledge, aligned to shared values about how behavior gets classified and what context gets captured. A thin package that configures OpenTelemetry identically everywhere passes the stability test in the next section; a library that decides what a service logs doesn't. Security is the main exception, covered below.
+
+What remains is business logic, and if your business logic is so coupled across services that a single bug requires simultaneous fixes everywhere, you don't have a sharing problem, you have a boundary problem.
 
 A shared library is rarely the right answer because the problem it solves (duplicated code) seldom justifies the problems it creates (coupling, versioning, blocked teams). The default is no, and the burden of proof sits with the library to show it will stay narrow and stable.
-
-The common rebuttal is "but if there's a bug, I fix it once and it propagates everywhere." Concerns like logging and observability shouldn't be blindly shared implementations. A service **authors** them out of its own domain knowledge, aligned to shared values about how behavior gets classified and what context gets captured. A thin package that configures OpenTelemetry identically everywhere passes the stability test below; a library that decides what a service logs doesn't. Security is the main exception, covered below. Bugs in third-party libraries get fixed upstream on the vendor's cycle, and you take the fix by upgrading. What remains is business logic, and if your business logic is so coupled across services that a single bug requires simultaneous fixes everywhere, you don't have a sharing problem, you have a boundary problem.
 
 ## Don't Reinvent the Wheel vs. Don't Share Internal Types
 
@@ -103,15 +107,13 @@ The framework primitives are already shared, tested, and documented. Your wrappe
 
 ## The Principle Is Broader Than Distribution
 
-The same problem exists in a modular monolith wherever different teams own different domains. There, shared packages between domains still couple teams to the same change cycles. The difference is severity. In a monolith, the blast radius is contained: teams share a deployable, so version conflicts surface as build errors. In a distributed system, a change that would have been a merge conflict becomes a multi-team coordination effort with blocked releases and stale dependencies.
+The same problem exists in a modular monolith wherever different teams own different domains. There, shared packages between domains still couple teams to the same change cycles. The difference is severity. In a monolith, the blast radius is contained: teams share a deployable, so version conflicts surface as build errors. In a distributed system, a change that would have been a merge conflict becomes a multi-team coordination effort with blocked releases and stale dependencies. Topology doesn't change this for domain code. If Domain A and Domain B share implementation code, they're a distributed monolith with extra steps.
 
-Monorepos that enforce a single version of every dependency, which Google's *Software Engineering at Google* calls the One-Version Rule, get the monolith's version of the cost rather than escaping it. Version skew can't happen, but a breaking change to the library has to update every consumer before it lands, so the coordination moves to whoever changes the library. Google absorbs that cost with large-scale-change tooling most organizations lack.
-
-Topology doesn't change this for domain code. If Domain A and Domain B share implementation code, they're a distributed monolith with extra steps. Domain-driven design does sanction one form of sharing, the Shared Kernel, but Eric Evans conditions it on neither team changing it without consulting the other, which accepts the coordination cost on purpose.
+Two practices that look like exceptions accept the cost rather than escape it. One is the monorepo that enforces a single version of every dependency, which Google's *Software Engineering at Google* calls the One-Version Rule. It gets the monolith's version of the cost. Version skew can't happen, but a breaking change to the library has to update every consumer before it lands, so the coordination moves to whoever changes the library. Google absorbs that cost with large-scale-change tooling most organizations lack. Domain-driven design's Shared Kernel is the other. Eric Evans conditions it on neither team changing it without consulting the other, which accepts the coordination cost on purpose.
 
 ## The API Client Library Obsession
 
-The most common incarnation of shared library dysfunction is the API client package: a library of hand-written contracts, DTOs, and client code, as opposed to stubs generated from a published schema, that consumers are expected to import when calling your service. I have never seen this pattern result in anything short of chaos.
+The most common incarnation of shared library dysfunction is the API client package: a library of hand-written contracts, DTOs, and client code that consumers are expected to import when calling your service. I have never seen this pattern result in anything short of chaos.
 
 The pitch sounds reasonable: "We'll publish a client library so consumers don't have to write their own HTTP calls or define their own contracts." But this solves a problem that doesn't exist while creating several that do.
 
@@ -123,7 +125,7 @@ The pitch sounds reasonable: "We'll publish a client library so consumers don't 
 
 **The absurdity becomes obvious with frontend consumers.** The iOS app doesn't need a backend team's Swift package to call its API. The iOS team reads the documentation, or generates a client from the published schema itself, and maps responses to whatever structures suit the application. The consumer's requirements don't change based on what language they're written in.
 
-This reflexive reach for client libraries has been conditioned by years of cargo-culting patterns from contexts where they made sense (public cloud SDKs with complex auth flows) into contexts where they don't (internal services with straightforward REST endpoints). When an internal API needs multi-step orchestration or idempotency handling to call correctly, that logic belongs behind the API, where the producer controls it, not in a package every consumer has to upgrade.
+This reflexive reach for client libraries has been conditioned by years of cargo-culting. Patterns that made sense in public cloud SDKs with complex auth flows got carried into internal services with straightforward REST endpoints, where they don't. When an internal API needs multi-step orchestration or idempotency handling to call correctly, that logic belongs behind the API, where the producer controls it, not in a package every consumer has to upgrade.
 
 ## The Governance Theater Problem
 
@@ -139,9 +141,9 @@ Governance through values: "Here's why we authenticate this way, here are the tr
 
 Governance through code: "Use this library or you're non-compliant."
 
-The first creates alignment while preserving autonomy. Teams understand the principles and can make good decisions in novel situations. The second creates coupling while providing the illusion of alignment. Teams comply without understanding, and the moment they hit a situation the library doesn't cover, they're lost. Conformance tests, linters, and reviews against the stated principles keep alignment from decaying. They gate builds rather than ship inside services, so updating one forces no release, and a new rule can start as a warning.
+The first creates alignment while preserving autonomy. Teams understand the principles and can make good decisions in novel situations. The second creates coupling while providing the illusion of alignment. Teams comply without understanding, and the moment they hit a situation the library doesn't cover, they're lost.
 
-An optional "paved road" library that teams can leave when their needs differ is closer to the first kind. The values come first, and the library is one documented way to follow them. It turns into theater when using the library becomes the compliance check.
+Values still need enforcing. Conformance tests, linters, and reviews against the stated principles keep alignment from decaying. They gate builds rather than ship inside services, so updating one forces no release, and a new rule can start as a warning. An optional "paved road" library that teams can leave when their needs differ is closer to the first kind. The values come first, and the library is one documented way to follow them. It turns into theater when using the library becomes the compliance check.
 
 ## The Exception: Security Protocols
 
@@ -154,7 +156,7 @@ Why security is different:
 - **The surface area is thin and focused.** A good security library does one thing.
 - **Autonomy isn't the goal.** You actually want teams to do security the same way. The coupling is a feature, not a bug.
 
-Other code that must behave identically everywhere usually lands elsewhere, like trace-context propagation in external libraries such as OpenTelemetry that implement the W3C Trace Context standard, or a regulatory calculation in a service. In-process code that meets all four conditions, such as redacting personal data before logs leave a service, earns the same exception. Security is where that holds most often.
+Other code that must behave identically everywhere usually lands elsewhere. Trace-context propagation belongs in external libraries such as OpenTelemetry, which implement the W3C Trace Context standard, and a regulatory calculation belongs in a service. In-process code that meets the four conditions above, such as redacting personal data before logs leave a service, earns the same exception. Security is where that holds most often.
 
 Even here, mature external libraries or a service mesh should do the protocol work, and the internal library should be the thinnest layer that applies your organization's policy. The moment it starts accumulating "helpful" utilities beyond its core purpose, it's sliding toward the problems that plague other shared libraries.
 

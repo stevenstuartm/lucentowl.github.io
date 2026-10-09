@@ -26,9 +26,9 @@ By leadership I mean other people choosing to follow your judgment. Here are the
 
 There's a difference between ten years of experience and one year of experience repeated ten times. Repeating experience means doing the same work year after year, measuring tenure rather than growth. You solve the same class of problem at the same difficulty, year after year. The work feels comfortable because you've solved these problems before.
 
-Accumulating experience means building new capabilities, taking on broader responsibilities, and establishing feedback loops for yourself and your team. You master a domain, then take on harder problems in it or stretch into adjacent ones. Going deeper counts as much as going wider, as long as the problems keep getting harder. The discomfort signals learning when you can say how the problem is harder than last year's.
+Accumulating experience means building new capabilities, taking on broader responsibilities, and establishing feedback loops for yourself and your team. You master a domain, then take on harder problems in it or stretch into adjacent ones. Going deeper counts as much as going wider, as long as the problems keep getting harder. Harder problems bring discomfort, and it signals learning when you can say how the problem is harder than last year's.
 
-Leaders accumulate in two directions. They create opportunities for others while advancing their own skills. Even when deeply focused on technical work, they enable team growth by making their knowledge accessible, their decisions transparent, and their expertise transferable, for example by writing down why a decision went the way it did where the team can find it.
+Leaders accumulate in two directions, for themselves and for others. They create opportunities for others while advancing their own skills. Even when deeply focused on technical work, they enable team growth by making their knowledge accessible, their decisions transparent, and their expertise transferable. One way is to write down why a decision went the way it did, where the team can find it.
 
 ## 2. "It Works" vs. "Is This Good?"
 
@@ -36,7 +36,7 @@ Everyone starts with "it works because it's not broken." It's easy to stay there
 
 The shift happens when you start taking accountability for code quality *after* deployment. The code shipped, the tests passed, and no one is complaining. It's easy to stop there. Leaders keep asking "Is this good?" even when everything seems fine.
 
-This isn't perfectionism or over-engineering. It's recognizing that quality isn't the absence of complaints; it's the presence of standards. Production stability is necessary but insufficient. Leaders evaluate maintainability, clarity, and performance characteristics. They ask whether the code reflects the understanding the team has today rather than the understanding they had when they started.
+Quality isn't the absence of complaints; it's the presence of standards. Production stability is necessary but insufficient. Leaders evaluate maintainability, clarity, and performance characteristics. They ask whether the code reflects the understanding the team has today rather than the understanding they had when they started.
 
 A standard differs from perfectionism in that you can state it and tie it to a cost. "This module will be hard to change when the pricing rules move" is a standard the team can weigh against the deadline. "I'd have written it differently" is a preference, and asking "Is this good?" doesn't license acting on it.
 
@@ -44,13 +44,15 @@ A standard differs from perfectionism in that you can state it and tie it to a c
 
 There's a maturity shift that happens when developers stop relying solely on what they already know to evaluate their work. Early in your career, you ask questions to fill knowledge gaps: "How do I implement this feature?" or "What's the right pattern here?" These are important, but they're bounded by what you already understand.
 
-Leaders develop a different instinct. They assume there are critical questions they haven't thought to ask yet. They seek out perspectives that challenge their assumptions. They recognize that the gaps you can't plan for at all are often the most dangerous, because a known gap can at least be weighed and scheduled, and an unknown one can't.
+Leaders develop a different instinct. They assume there are critical questions they haven't thought to ask yet. They seek out perspectives that challenge their assumptions. They recognize that the gaps they can't plan for at all are often the most dangerous. A known gap can at least be weighed and scheduled, and an unknown one can't.
 
 This shows up in reviews, design discussions, and retrospectives. Instead of defending your choices, you probe for what you might have missed.
 
 Do you ask "What am I not seeing?" or "Do you see any issues?" One question invites discovery; the other invites validation.
 
-The wording only helps if something backs it. Handing the reviewer the assumptions you're least sure of tests the design where you already suspect it's weak. Reaching the gaps you don't suspect takes other people's doubts, and Gary Klein's premortem is built for that. Everyone on the team assumes the project has already failed and writes down why, so the list includes causes you never thought of.
+The wording only helps if your preparation backs it. Handing the reviewer the assumptions you're least sure of tests the design where you already suspect it's weak.
+
+Reaching the gaps you don't suspect takes other people's doubts, and Gary Klein's premortem is built for that. Everyone on the team assumes the project has already failed and writes down why, so the list includes causes you never thought of.
 
 ## 4. Does Quality Approve Your Work, or Does Approval Define Quality?
 
@@ -60,9 +62,13 @@ Just because no one flagged your code in review doesn't mean it's quality work. 
 
 ## 5. Do You Build Others While You Build Systems?
 
-The most effective technical leaders understand something fundamental: we learn by teaching. When you mentor less experienced developers, you're not just being generous with your time. Explaining a design from memory forces you to recall and organize what you know, and it exposes the parts you only thought you understood. Logan Fiorella and Richard Mayer tested this in 2013. Students who taught a lesson by recording a video lecture outperformed students who had only prepared to teach it, on a comprehension test a week later. In 2018, Koh, Lee, and Lim traced the gain to retrieval. Students who lectured without notes gained as much as students who simply took a recall test, while students who read a prepared script aloud didn't gain. So explain the design from memory rather than walking someone through the diff. Both studies tested students on a single lesson, so they support the mechanism, not any particular size of payoff for an engineer.
+The most effective technical leaders understand something fundamental: we learn by teaching. When you mentor less experienced developers, you're not just being generous with your time. Explaining a design from memory forces you to recall and organize what you know, and it exposes the parts you only thought you understood.
 
-This can compound. As junior developers learn to handle the work you do today, you create space to tackle the challenges your leaders face. As they grow, you grow. You're not delegating to save time; you're building organizational capability while advancing your own. The return isn't immediate. Teaching slows you down for weeks before it frees anything up, and the space only opens if the people you taught take on the work you used to do. Even then, the freed space doesn't claim itself. Ask for the harder work explicitly, or it fills with more of the same.
+Logan Fiorella and Richard Mayer tested this in 2013. Students who taught a lesson by recording a video lecture outperformed students who had only prepared to teach it, on a comprehension test a week later. In 2018, Koh, Lee, and Lim traced the gain to retrieval. Students who lectured without notes gained as much as students who simply took a recall test. Students who read a prepared script aloud gained nothing. Both studies tested students on a single lesson, so they support the mechanism, not any particular size of payoff for an engineer. The practical version is to explain the design from memory rather than walking someone through the diff.
+
+This can compound. As junior developers learn to handle the work you do today, you create space to tackle the challenges your leaders face. As they grow, you grow. You're not delegating to save time; you're building organizational capability while advancing your own.
+
+The return isn't immediate. Teaching slows you down for weeks before it frees anything up, and the space only opens if the people you taught take on the work you used to do. Even then, the freed space doesn't claim itself. Ask for the harder work explicitly, or it fills with more of the same.
 
 Great engineers solve hard problems. Great leaders create engineers who solve hard problems. One scales with your own hours. The other scales with the hours of everyone you've taught, because what they learned keeps working after your mentoring time ends, as long as they stay on the team and on work that uses it. Mentorship isn't a nice-to-have activity you do when you have spare cycles; it's a core responsibility that determines whether you're writing code or building systems, working alone or multiplying impact.
 
@@ -80,7 +86,9 @@ Each pattern reduces to a question you can put to your own work:
 - When I hold a standard the reviewer didn't, have I stated its cost so the team can adopt it?
 - Who on the team can now do something they couldn't before I worked with them?
 
-A title doesn't grant these habits, but the hours some of them need come from whoever owns the schedule. Mentoring and revisiting shipped code take time a deadline wants. A standard stated with its cost, like the pricing-rules example, is how you earn those hours, and framing your own review request needs none. A title also brings a seat in the rooms where designs get set. The habits don't replace that seat, but they're how people without one get invited, because the engineer whose questions surface problems early is the one someone asks to the next design review.
+A title doesn't grant these habits, but the hours some of them need come from whoever owns the schedule. Mentoring and revisiting shipped code take time a deadline wants. A standard stated with its cost, like the pricing-rules example, is how you earn those hours. Handing a reviewer your least-sure assumptions needs no hours at all.
+
+A title also brings a seat in the rooms where designs get set. The habits don't replace that seat, but they're how people without one get invited, because the engineer whose questions surface problems early is the one someone asks to the next design review.
 
 <blockquote class="pull-quote">
 <p>None of this requires a title. You don't need a promotion to mentor someone, to ask better questions, or to hold yourself to higher standards.</p>

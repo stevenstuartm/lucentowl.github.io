@@ -11,7 +11,7 @@ Review publishable content against the site's highest quality standards before i
 | Mode | What it adds | Stops when |
 | --- | --- | --- |
 | `iterate` | Repeats the full review, each round in a fresh subagent that has never seen the post | A round needs no updates, or three rounds have run |
-| `convince-me` | After the review, fresh skeptic subagents read the post and say whether it convinced them. The orchestrator revises after each one | A skeptic is convinced |
+| `convince-me` | After the review, fresh skeptic subagents read the post and say whether it convinced them. The orchestrator revises after each one | A skeptic is convinced and a fresh reader can still follow the post |
 | both | `iterate` runs to completion first, then `convince-me` | Both conditions are met |
 
 ---
@@ -182,6 +182,8 @@ A post over budget is an `L#` finding, and it's a FIX. Bring it under budget in 
 3. **Drop restating closers and lead-ins**, such as a sentence that repeats what the example just showed or a paragraph opener that rephrases the heading.
 4. **Compress the conclusion to what the body hasn't already said.** The answers or recommendations carry new material, and the diagnosis is already on the page.
 5. **Trim secondary evidence last.** Keep at least one source per claim, and cut a second quote or a supporting detail only after steps 1-4 have run out.
+
+A post can be under budget and still too dense to read, when additions were paid for by cutting transitions and breathing room. That's a job for `/untangle`, not for more cuts here.
 
 Never cut the post's examples, its sources for claims it still makes, or any section the header tree depends on just to hit a number. If the post can't fit the budget without losing its argument, the scope is too broad. Raise that as an ASK that proposes how to split or narrow the post, and don't thin every section evenly.
 
@@ -393,15 +395,19 @@ Each round of `iterate` is a complete review (Steps 1-12, resolution pass includ
    - **Fixed**: an overreach to narrow, a gap between steps that the post's own material can close, an unclear claim, a verifiable source the claim needs, or a counterargument the post can answer from its own reasoning.
    - **Decided**: the fix needs a judgment call, such as restructuring, reconciling a contradiction, or conceding a limit. When it would need the author's experience or a number only they have, resolve it without inventing one: narrow the claim, source it, or cut it. The author's held position is never conceded to a skeptic. Strengthen the case for it or narrow it where it overreaches, but don't swap in the skeptic's view.
    - **Withdrawn**: the objection is to voice or style, rests on a misreading the text doesn't invite, or asks for a different post.
-4. Apply every Fixed and Decided objection to the file, keeping the reading-time budget (pay for additions with cuts, per Step 8). Re-run the Step 2 mechanical checks on the changed passages.
+
+   **Place each fix where it reads, not where the objection points.** Prefer narrowing or cutting an overreach over adding a defense of it. When a fix does need a defense, add it inline only if the paragraph doesn't already carry one. Otherwise, put it in the one paragraph that faces that objection, or in the section on where the argument stops applying, and create that paragraph if it doesn't exist yet. Answering each objection with a clause where it came up is what makes a post persuasive and unreadable at once.
+4. Apply every Fixed and Decided objection to the file, keeping the reading-time budget (pay for additions with cuts, per Step 8). Re-run the Step 2 mechanical checks on the changed passages, and run the `/untangle` Step 1 density measure. A changed paragraph over about 120 words, or a new sentence over 35 words, gets split or consolidated before the next skeptic reads it.
 5. Start the next round with a new skeptic.
 
 **A returning objection**: when an objection a fix was supposed to resolve comes back in substance from a new skeptic, the fix didn't work. Try a different fix (a stronger source, a narrower claim, or a cut) and record both skeptics' reasons in the ledger.
 
 **Stop** when:
 
-- A skeptic answers **yes**. That's the only success exit.
+- A skeptic answers **yes** and the post passes the **readability gate** below. That's the only success exit.
 - Every objection in a round is Withdrawn.
 - Five rounds have run without a yes.
 
-**Report**: after the review report, a **CONVINCE-ME** section with one row per round (round number, verdict, the skeptic's thesis sentence, objection IDs, and what you changed), then every `V#` finding in the findings ledger alongside the review's own. The verdict states whether a skeptic was convinced. A post that never convinced one isn't ready to publish, so name the objections the last skeptic still held and what was tried against each.
+**Readability gate**: a post that convinces a skeptic but loses an ordinary reader hasn't succeeded. When a skeptic says yes, run the `/untangle` Step 7 fresh reader on the post. It passes when the reader states the thesis correctly, states each section's point, and reports no lost thread. Otherwise, fix what the reader reported under the `/untangle` rules (content fixed, budget held) and run a new fresh reader, up to two times. The gate needs no new skeptic, because those fixes don't change the argument. If the post still fails after two readers, say so in the verdict and recommend running `/untangle`.
+
+**Report**: after the review report, a **CONVINCE-ME** section with one row per round (round number, verdict, the skeptic's thesis sentence, objection IDs, and what you changed), the readability gate's result, then every `V#` finding in the findings ledger alongside the review's own. The verdict states whether a skeptic was convinced. A post that never convinced one isn't ready to publish, so name the objections the last skeptic still held and what was tried against each.
