@@ -66,7 +66,7 @@ sources:
     url: "https://engineering.fb.com/2022/11/15/open-source/sapling-source-control-scalable/"
 ---
 
-Facebook's 2015 engineering post introducing GraphQL explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The line most people quote from that post is that "the shape of the returned data is determined entirely by the client's query." That's true, but it's a consequence of the graph, not the reason GraphQL exists. No server team can design an endpoint for every path through a graph that size, across every app version reading it, so the client has to write the query.
+Facebook's 2015 engineering post introducing GraphQL explained where the idea came from: "We don't think of data in terms of resource URLs, secondary keys, or join tables; we think about it in terms of a graph of objects." The line most people quote from that post is that "the shape of the returned data is determined entirely by the client's query." That's true, but it's a consequence of the uniquely complex and deep graph, not the reason GraphQL exists. No server team can design an endpoint for every path through a graph that size, across every app version reading it, so the client has to write the query.
 
 GraphQL solved Facebook's problem, and the burden of proof sits with everyone importing it to show that it solves theirs. I don't think most teams can meet it.
 

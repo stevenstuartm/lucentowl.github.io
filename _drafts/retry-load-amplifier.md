@@ -69,9 +69,9 @@ In .NET, `AddStandardResilienceHandler()` gives an `HttpClient` a retry strategy
 
 A service mesh adds a layer the application can't see. Istio's traffic management documentation sets the default for HTTP requests at two retries, made by the sidecar before the application's client learns the call failed. None of these layers knows whether the business operation should run twice. Only the domain code that made the call does.
 
-Put the standard handler on three hops in a row, and one user action that keeps failing can reach the bottom service four times per attempt at each hop. That's 4 × 4 × 4, or 64 attempts, which is the same figure Google's SRE book uses in its chapter on addressing cascading failures. Marc Brooker's Amazon Builders' Library article on timeouts and retries runs it on five layers of three tries each and gets 243 times the load on the database, "making it unlikely to ever recover."
+Put the standard handler on three hops in a row, and each hop makes four attempts for every attempt above it. For one user action that keeps failing, that's 4 × 4 × 4, or 64 attempts at the bottom service, the same figure Google's SRE book uses in its chapter on addressing cascading failures. Marc Brooker's Amazon Builders' Library article on timeouts and retries runs it on five layers of three tries each and gets 243 times the load on the database, "making it unlikely to ever recover."
 
-The standard handler also includes a circuit breaker, which cuts that worst case short once enough calls fail. Its timeouts help only where each service passes cancellation down.
+The standard handler also includes a circuit breaker, which cuts that worst case short once enough calls fail.
 
 Brooker calls retries "selfish." When a client retries, "it spends more of the server's time to get a higher chance of success." When failures are rare, the trade works. When failures come from overload, retries "can even delay recovery by keeping the load high long after the original issue is resolved."
 
@@ -91,7 +91,7 @@ Each of those changes looked right from inside one component. Bronson and collea
 
 ## Who May Retry Is an Architecture Decision
 
-Every retry fix in the sources above moves a decision from the caller acting alone to something that can see more of the system. The table's first row comes before all of those fixes. It asks whether a call should retry at all, a question the systems in those sources never faced because they had to retry.
+Every retry fix in the sources above moves a decision from the caller acting alone to something that can see more of the system. The table below starts one step earlier, with whether a call should retry at all. The systems in those sources never faced that question, because their work had to retry.
 
 | Decision | Who makes it by default | Who should make it | Mechanism |
 | --- | --- | --- | --- |
@@ -109,17 +109,17 @@ For a synchronous business transaction, a retry rarely buys much. A dropped conn
 
 Retrying can also put the transaction itself at risk. When a call times out, the caller can't tell whether the first attempt committed, and the standard .NET handler retries a `POST` like any other call. Turning on its `DisableForUnsafeHttpMethods` option, or an idempotency key that every service on the path honors, makes that safe.
 
-Failing cleanly and telling the user leaves the decision with the one party who knows whether trying again is worth it. A user who refreshes still retries, but with no retries below it, each refresh reaches the dependency once. The client app is part of that decision too, both its own retries and what its error tells the user to do.
+Failing cleanly and telling the caller leaves the decision with the one party who knows whether trying again is worth it. A user who refreshes still retries, but with no retries below it, each refresh reaches the dependency once. That makes the client app's own retries, and what its error tells the user to do, part of the same decision.
 
-Zero is a valid answer to which layer should retry, and for a synchronous business call it's often the right one. The two choices don't cost the same. Skipping the retry on a blip costs one error the user can repeat. Retrying safely costs everything that follows: a chosen layer, a budget, a no-retry signal, and idempotency on every write.
+Zero is a valid answer to which layer should retry, and for a synchronous business call it's often the right one. The two choices don't cost the same. Skipping the retry on a blip costs one error the caller can repeat. Retrying safely costs everything that follows: a chosen layer, a budget, a no-retry signal, and idempotency on every write.
 
 When the domain decides a business call is worth the cost of retrying safely, such as an idempotent read after a dropped connection, it gets the same controls as infrastructure work. In .NET, that means registering the resilience handler only on the clients that make those calls, not on every client by default.
 
 Work that doesn't have to finish right now belongs in a queue, not a retry loop. A consumer pulls at its own pace, so its concurrency caps the load on the dependency, and an overload becomes a backlog instead of more traffic.
 
-Queues bring their own problems. Work can go stale before it runs. AWS's lease manager collapsed that way, retrying lease work that had already timed out. Google's chapter on cascading failures gives the fixes: short queues, so a server rejects early, and a deadline check before each stage of work. Work that goes back on the queue needs a cap too, which is the retry budget below by another name.
+Queues bring their own problems. Work can go stale before it runs. AWS's lease manager collapsed that way, retrying lease work that had already timed out. Google's chapter on cascading failures gives the fixes: short queues, so a server rejects early, and a deadline check before each stage of work. Work that goes back on the queue needs a cap on how often it returns, a retry budget by another name.
 
-The fixes that follow are for work that has to retry, like the replica syncs, webhook delivery, and integration jobs most teams also run.
+The fixes that follow are for work that has to retry, like replica syncs, webhook delivery, and integration jobs, and for reads a domain chooses to retry.
 
 ### One Layer Retries
 
@@ -145,7 +145,7 @@ app.MapGet("/orders/{id}/stock", async (string id, InventoryClient inventory,
     }
 });
 
-// Every caller of Orders keeps the standard retry, but not for that answer.
+// A caller of Orders that retries skips that answer.
 builder.Services.AddHttpClient<OrdersClient>()
     .AddStandardResilienceHandler(options =>
     {
@@ -155,13 +155,13 @@ builder.Services.AddHttpClient<OrdersClient>()
     });
 ```
 
-Any header name works if every caller honors it, including a mesh's sidecar. Unless the sidecar's retries are off for that route, it can retry before the application ever sees the header.
+Any header name works if every caller honors it. A mesh's sidecar is a caller too, and unless its retries are off for that route, it retries before the application ever sees the header.
 
 ### A Budget Caps Retries Against Total Traffic
 
 A per-request limit like "three retries" caps how much one request can multiply, not how much the fleet does. Google's chapter on handling overload pairs its per-request limit of three attempts with a per-client budget, where each client retries only while retries are under 10% of its requests. In the chapter's worst case, where a datacenter rejects most of what it receives, the per-request limit alone lets load grow to just under three times, and the 10% budget holds it to 1.1 times.
 
-Some client libraries carry a looser budget. The AWS SDKs' standard retry mode includes a retry quota, a token bucket that each retry draws down and each success refills. When it runs dry, the SDK "returns the error without retrying." Under the 2026 behavior, the quota drains only once about 22% of requests keep failing, a looser line than Google's 10%. gRPC's retry guide describes throttling that works the same way per server, pausing retries when the token count falls below half. The standard .NET handler has no such budget, so whether a dependency needs one is a decision to make, not a default to inherit.
+Some client libraries carry a looser budget. The AWS SDKs' standard retry mode includes a retry quota, a token bucket that each retry draws down and each success refills. When it runs dry, the SDK "returns the error without retrying." Under the 2026 behavior, the quota drains only once about 22% of requests keep failing. By then, retries are well above Google's 10% of traffic. gRPC's retry guide describes throttling that works the same way per server, pausing retries when the token count falls below half. The standard .NET handler has no such budget, so whether a dependency needs one is a decision to make, not a default to inherit.
 
 A budget like this needs no view of the other clients. If every client of the one retrying layer caps retries at 10% of its own traffic, the dependency sees at most 1.1 times its load, however many clients there are. Huang and colleagues find that "the policy with no cap effectively leaves the system with no stable region."
 

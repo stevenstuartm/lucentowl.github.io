@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Why WPF Outlived Every Windows UI Framework Offered in Its Place"
+title: "Why WPF Outlived Silverlight and UWP, and WinUI 3 Still Hasn't Replaced It"
 description: "Silverlight, Windows 8's XAML, and UWP each paid for a platform bet by taking deployment and trust decisions away from the app's developer, and WPF outlived all three because it never did. WinUI 3 finally gave those decisions back, but it started from UWP's codebase, so WPF teams still lack the designer and controls their apps are built on."
 tags: [architecture, dotnet, wpf, winui, desktop, legacy-modernization]
 author: steven-stuart
@@ -39,9 +39,7 @@ sources:
 
 Since WPF shipped in 2006, Microsoft has pointed Windows developers at a new XAML framework four times. WPF is still here. Most of Visual Studio's interface is built with it, .NET 9 gave it a Windows 11 Fluent theme, and Microsoft's current Windows developer FAQ answers "Is WPF deprecated?" with a flat no.
 
-> **AUTHOR** — the author's experience goes here: building on each of these frameworks in turn, and the WPF point-of-sale system in hundreds of stores. Did control over how and when stores received updates shape the framework choice?
-
-The usual explanation for WPF's staying power is a run of bad luck for its successors. HTML5 ended Silverlight, Windows 8 flopped, and Windows Phone died. Those events happened, but they share a cause. Each of the three successors between WPF and WinUI 3 was built to carry a platform bet, and each paid for the bet by taking decisions away from the app's developer: which Windows versions could run the app, how it reached users, what it was allowed to touch, and when its UI layer got fixes. WPF left all of those decisions with the team that owned the app, so the teams that stayed on it weren't clinging to old technology. They were keeping control.
+The usual explanation for WPF's staying power is a run of bad luck for its successors. HTML5 ended Silverlight, Windows 8 flopped, and Windows Phone died. Each of the three successors between WPF and WinUI 3 was built to carry a platform bet, and each paid for the bet by taking away some of the decisions the app's developer used to make: which Windows versions could run the app, how it reached users, what it was allowed to touch, and when its UI layer got fixes. WPF left all of those decisions with the team that owned the app, so the teams that stayed on it weren't clinging to old technology. They were keeping control, along with the stack their apps were built on.
 
 WinUI 3 is the first successor that hands that control back. It arrived from the wrong starting point, though, built from UWP's codebase rather than WPF's, and without the designer and controls that WPF applications are built on.
 
@@ -51,7 +49,9 @@ WPF was a large technical break from Windows Forms. It replaced GDI drawing with
 
 That arrangement is easy to overlook because it's the default for desktop software. Which operating systems to support, how to install, what the app can reach on the machine, and when to update were all the app owner's calls. A line-of-business team could adopt WPF without asking its IT department to change anything about the fleet.
 
-WPF's own history also sets a baseline that any honest version of this argument has to account for. WPF didn't displace Windows Forms either. WinForms still ships with .NET, and Microsoft's FAQ lists ongoing work on it, including async dialogs, dark mode, and designer improvements. Working desktop apps rarely rewrite their UI for any reason, so some of WPF's longevity is plain inertia. What inertia doesn't explain is why new projects kept starting on WPF for more than a decade after Microsoft started pointing elsewhere, or why Microsoft's FAQ still calls it a good choice for new apps whose requirements fit it.
+Inertia doesn't explain WPF's survival, because teams didn't sit still. Every company I've worked for rewrote its UI as soon as Microsoft shipped something new. Microsoft has a habit of dropping the apps, tools, and even Azure services it backed the year before, and nobody wanted to be left behind on the old one, even though the new one was often the next to go.
+
+The teams that stayed were the ones that couldn't afford the rush. They built line-of-business software for enterprise customers, where a framework change reaches into each customer's own deployment setup, such as their mobile device management (MDM). They didn't stay because Microsoft told them to, since Microsoft spent those years pointing them at a successor. WPF kept them because it left deployment alone.
 
 ## Three Successors That Took the Decisions Away
 
@@ -63,13 +63,13 @@ At the Professional Developers Conference in 2010, Microsoft's Bob Muglia told Z
 
 ### Windows 8 Bet on the Store and the Tablet
 
-Windows 8 introduced a new XAML stack built into the operating system, aimed at touch-first apps sold through the Windows Store. Those apps ran only on Windows 8 and later, inside an AppContainer sandbox that limited what they could reach on the machine. Installing one outside the Store, which Microsoft called sideloading, required, per Microsoft's TechNet guidance, an Enterprise edition joined to a domain with the right group policy, or a sideloading product key.
+Windows 8 introduced a new XAML stack built into the operating system, aimed at touch-first apps sold through the Windows Store. Those apps ran only on Windows 8 and later, inside an AppContainer sandbox that limited what they could reach on the machine. Installing one outside the Store, which Microsoft called sideloading, required an Enterprise edition joined to a domain with the right group policy, or a sideloading product key, according to Microsoft's TechNet guidance.
 
-For a line-of-business team, every one of those terms was a decision taken away. The app couldn't run on the Windows 7 machines many fleets still ran, couldn't install the way the team's other software installed, and couldn't touch the file shares and devices that business software touches.
+For a line-of-business team, every one of those terms was a decision taken away. The app couldn't run on the Windows 7 machines many fleets still ran and couldn't install the way the team's other software installed. It could reach file shares and devices only through the narrow capabilities the sandbox granted. Its controls also got fixes only when Windows did.
 
 ### UWP Bet on One App for Every Device
 
-The Universal Windows Platform arrived with Windows 10 in 2015 and kept the sandbox and the Store-first model. Its bet was convergence, one app across PCs, phones, Xbox, and HoloLens. Sideloading loosened over the following years, but Raymond Chen of Microsoft notes that it wasn't enabled by default until build 18956, which shipped as Windows 10 version 2004 in 2020, five years in.
+The Universal Windows Platform arrived with Windows 10 in 2015 and kept the sandbox and the Store-first model. Its bet was convergence, one app across PCs, phones, Xbox, and HoloLens. Sideloading loosened over the following years, but Raymond Chen of Microsoft notes that it wasn't enabled by default until build 18956. That build shipped as Windows 10 version 2004 in 2020, five years after UWP launched.
 
 UWP also kept the UI framework inside the operating system, and that decided when an app's controls got fixes. Microsoft's 2018 announcement of the Windows UI Library, which moved UWP's controls into NuGet packages, described the old model plainly: "In order to get new features or fixes, you had to wait for a new version of Windows," and then wait again for users to install it. The app's developer didn't control the release cadence of its own UI.
 
@@ -78,44 +78,50 @@ The convergence bet ended with the phone. In October 2017, Microsoft's Joe Belfi
 | Framework | Year | The bet | What the developer gave up | How the bet ended |
 | --- | --- | --- | --- | --- |
 | Silverlight | 2007 | Rich apps live in the browser | Full trust; reach beyond the plugin | Strategy shifted to HTML5 in 2010; support ended 2021 |
-| Windows 8 XAML | 2012 | Touch apps sold through the Store | Older Windows versions; own installer; full trust; UI fix cadence | Superseded by UWP three years later |
+| Windows 8 XAML | 2012 | Touch apps sold through the Store | Older Windows versions; own installer; full trust; UI fix cadence | Windows 8 flopped; replaced by UWP in 2015 |
 | UWP | 2015 | One app for every Windows device | Windows 7 and 8; own installer until 2020; full trust; UI fix cadence | Phone abandoned 2017; WinUI 3 recommended instead |
 
-The failures look circumstantial one at a time, since nobody at Microsoft planned for HTML5 or the iPhone. But each framework was tied to its bet so tightly that the bet's failure became the framework's. WPF made no bet beyond the Windows desktop, and the Windows desktop outlived every bet made beyond it.
+The failures look circumstantial one at a time. HTML5 made browser plugins unnecessary, and iOS and Android left no room for a third phone platform. But each framework was tied to its bet so tightly that the bet's failure became the framework's. WPF made no bet beyond the Windows desktop, and the Windows desktop outlived every bet made beyond it.
 
 ## WinUI 3 Fixed the Right Problem From the Wrong Starting Point
 
 ### It Gave the Decisions Back
 
-Microsoft announced Project Reunion at Build 2020, and its goal, as InfoQ summarized it, reads as a direct answer to the table above. It would decouple the Windows UI stack from the operating system and ship it through NuGet to ordinary Win32 desktop apps. WinUI 3 reached version 1.0 in November 2021 as part of the Windows App SDK.
+Microsoft announced Project Reunion at Build 2020. Its goal, as InfoQ summarized it, was to decouple the Windows UI stack from the operating system and ship it through NuGet to ordinary Win32 desktop apps, which would reverse most of the losses in the table above. WinUI 3 reached version 1.0 in November 2021 as part of the Windows App SDK.
 
-A WinUI 3 app runs as a full-trust desktop process unless it opts into isolation. It can install unpackaged, through the team's own MSI or setup program, and since Windows App SDK 1.1 in 2022 it can deploy self-contained, carrying its UI framework in its own folder. It runs on Windows 10 version 1809 and later, and the UI layer updates when the app does. Every decision the previous three frameworks took away is the developer's again.
+A WinUI 3 app runs as a full-trust desktop process unless it opts into isolation. It can install unpackaged, through the team's own MSI or setup program, and since Windows App SDK 1.1 in 2022 it can deploy self-contained, carrying its UI framework in its own folder. It runs on Windows 10 version 1809 and later, and the UI layer updates when the app does. Trust, installation, and fix cadence are the developer's again, and the OS floor dropped to a version most supported fleets already ran.
+
+### Handing Them Back Has a Price for UWP Teams
+
+Handing decisions back turned out to be harder than taking them, because a decision a framework makes for long enough becomes something its customers build on. Teams coming from UWP found this out. Their customers built their security stance around the sandbox, so a full-trust WinUI 3 app asks each of them to invest in security controls the UWP app never needed. WinUI 3 can technically run in a sandbox too, but in my experience not once the app has to integrate with devices. So WinUI 3's sandbox only suits apps that need nothing a website couldn't already do.
+
+For the past year I've worked on a UWP to WinUI 3 migration I would never have approved, and asking customers for those controls has been a constant point of conflict. It risks angering the customers the migration was supposed to serve.
 
 ### It Started From UWP, Not WPF
 
 Microsoft's FAQ is explicit that WinUI 3 "started from the WinUI for UWP codebase," and it shows. For a UWP team, WinUI 3 is a close relative, with the same XAML dialect and controls, new namespaces, and a replaced app model. For a WPF team, it's a different framework that happens to use XAML.
 
-Microsoft's guide to migrating WPF app patterns lists what WPF applications lean on that WinUI 3 handles differently. Style triggers and data triggers become attached behaviors, `MultiBinding` becomes converters or `x:Bind`, and `{DynamicResource}` becomes `{ThemeResource}`. There is no first-party `DataGrid`, the control many line-of-business screens are built around, and the guide points teams to community projects instead. The same guide says the Design tab of Visual Studio's XAML Designer doesn't support WinUI 3 projects, and Microsoft's own migration notes say WinUI 3 apps launch more slowly, use more memory, and install larger than equivalent UWP apps.
+Microsoft's guide to migrating WPF app patterns lists what WPF applications lean on that WinUI 3 handles differently. Style triggers and data triggers become attached behaviors, `MultiBinding` becomes converters or `x:Bind`, and `{DynamicResource}` becomes `{ThemeResource}`. There is no first-party `DataGrid`, the control many line-of-business screens are built around, and the guide points teams to community projects instead. The same guide says the Design tab of Visual Studio's XAML Designer doesn't support WinUI 3 projects. WinUI 3 also trails UWP, the framework it came from. Microsoft's own migration notes say WinUI 3 apps launch more slowly, use more memory, and install larger than equivalent UWP apps.
 
-WinUI 3 solved the problem that made UWP unattractive, which was lost control. It didn't solve the problem that kept WPF teams where they were, which was that their applications were built on WPF's controls, triggers, and designer.
-
-> **AUTHOR** — the author's experience goes here: the WinUI 3 rebuild of a UWP app, and which gaps it hit. Tell it in the first person. Don't cite or name the rebuild case study.
+WinUI 3 solved the problem that made UWP unattractive to WPF teams, which was lost control. It didn't remove the other barrier that kept WPF teams where they were, which was that their applications were built on WPF's controls, triggers, and designer.
 
 ### Trust Was Already Spent
 
-After three reversals, developers had learned to wait and see, and WinUI 3's early releases, with no designer and visible control gaps, confirmed the habit. In March 2024, a thread on the WinUI GitHub repository titled "Ohh...WinUI3 is really dead!" collected complaints about the missing designer, unanswered issues, and component vendors that participants said had stopped updating their WinUI 3 suites. In August 2025, Microsoft committed to making WinUI "truly open source" in phases, and one long-time adopter replied, as The Register reported, "I don't think Microsoft understands the damage they have caused to the evangelists and wider developer community."
+Three reversals split companies into those that moved and those that waited. In both, developers fear falling behind and push to move before the old framework is dropped. Leadership decides which group a company lands in, and it tends to fall for that fear. The companies whose leadership held back learned to wait and see, and WinUI 3's early releases, with no designer and visible control gaps, confirmed the habit.
+
+The companies that moved paid for it. In March 2024, a thread on the WinUI GitHub repository titled "Ohh...WinUI3 is really dead!" collected complaints about the missing designer, unanswered issues, and component vendors that participants said had stopped updating their WinUI 3 suites. In August 2025, Microsoft committed to making WinUI "truly open source" in phases, and one long-time adopter replied, as The Register reported, "I don't think Microsoft understands the damage they have caused to the evangelists and wider developer community."
 
 That damage compounds the starting-point problem. A WPF team weighing a move has to believe both that the missing pieces will arrive and that the framework will outlast the next strategy shift, and it has three counterexamples on record.
 
-## Frameworks Last When They Decide Less for You
+## Frameworks Last When They Don't Make You Share Their Bet
 
-The lesson generalizes beyond Microsoft. A UI framework can make decisions for the teams that adopt it, and every decision it makes is one a team can no longer make when its own situation changes. The frameworks that lasted on Windows made the fewest of them. The ones that didn't last made many, and they made them in service of a bet the adopting team had no stake in.
+The lesson generalizes beyond Microsoft, and it turns on whose bet a framework's decisions serve. A UI framework can make decisions for the teams that adopt it, and every decision it makes is one a team can no longer make when its own situation changes. Apple's UIKit makes many of the decisions UWP made, including store distribution and a sandbox, but it makes them for iOS, the platform its adopters chose it to reach. Those teams gave up control to a bet they had already made themselves. Silverlight, Windows 8's XAML, and UWP made their decisions to help a platform win, so their adopters carried the bet's risk with no stake in its payoff. WPF made the fewest decisions and bet on nothing beyond the desktop its apps already ran on.
 
-The pattern has limits. It explains why new WPF projects kept starting, not why every old one survived, since inertia covers much of that. It also doesn't say WinUI 3 will fail. With deployment and trust handed back and development moving into the open, WinUI 3's remaining gaps are about controls and tooling, which are problems a framework can fix in place without asking anyone to change how they ship. Whether it does is a question of investment, and the history above is why WPF teams want to see the investment before they move.
+The pattern doesn't say WinUI 3 will fail. With deployment and trust handed back and development moving into the open, WinUI 3's remaining gaps for WPF teams are about controls and tooling, which are problems a framework can fix in place without asking anyone to change how they ship. Whether it does is a question of investment, and the history above is why WPF teams want to see the investment before they move.
 
 ## A Check Before Your Next Desktop Framework Decision
 
-For each framework you're weighing, including the one you're on, ask who decides each of these today, you or the framework's owner:
+For each framework you're weighing, including the one you're on, ask whether each of these rests with your team today or with the framework's owner:
 
 - **Which OS versions can run your app.** A framework tied to a new OS release makes your fleet's upgrade schedule its prerequisite.
 - **How the app installs and updates.** Store-only or package-only distribution replaces your installer and your rollout control.
@@ -124,4 +130,4 @@ For each framework you're weighing, including the one you're on, ask who decides
 - **Whether your core controls and tools exist.** A missing grid or designer turns every screen of a port into a redesign.
 - **What the framework is betting on besides your app.** If that bet fails, the framework's future goes with it.
 
-Every answer that comes back "the framework's owner" is part of that owner's bet you're agreeing to share. WPF lasted because, for twenty years, the answer to all six was the team that owned the app.
+Every answer that comes back "the framework's owner" is part of that owner's bet you're agreeing to share. WPF lasted because, for twenty years, the first four rested with the team that owned the app, its controls and designer already existed, and its only bet was the Windows desktop those apps already ran on.

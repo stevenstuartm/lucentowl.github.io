@@ -165,19 +165,6 @@ main {
     color: var(--color-primary);
 }
 
-/* Sub-brand mark, set like a trademark symbol in the name's top-right corner */
-.site-tag {
-    position: relative;
-    top: -0.8em;
-    margin-left: 0.25em;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: -0.05em;
-    text-transform: none;
-    color: var(--color-gold-text);
-}
-
 /* Phones: at full size the logo and name run under .header-actions. */
 @media (max-width: 480px) {
     :root {
