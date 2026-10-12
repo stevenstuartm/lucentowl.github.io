@@ -2,7 +2,7 @@
 layout: post
 title: "GraphQL Solved Facebook's Problem. Does It Solve Yours?"
 date: 2026-10-07
-description: "GraphQL let Facebook's clients write their own queries because no server team could predict every path through its graph. Every team importing it should show it has the same problem, and a team that locks GraphQL down to persisted queries has already listed every query it will send, so it needs GraphQL only if new queries arrive faster than anyone could hand-write them."
+description: "GraphQL let Facebook's clients write their own queries because no server team could predict every path through its graph. Every team importing it should show it has the same problem, and a team that locks GraphQL down to persisted queries has already listed every query it will send, so it needs GraphQL only when its screens take so many changing paths that an endpoint for each costs more than securing a query language."
 tags: [architecture, api-design, graphql, microservices, domain-boundaries]
 author: steven-stuart
 sources:
@@ -67,7 +67,7 @@ Facebook's 2015 engineering post introducing GraphQL explained where the idea ca
 
 GraphQL solved Facebook's problem, and the burden of proof sits with everyone importing it to show that it solves theirs. I don't think most teams can meet it.
 
-Most of what teams adopt GraphQL for is available without it. What's left is a client composing its own traversal of a graph the server can't predict. GraphQL's own best practices steer private APIs away from even that, by registering every query ahead of time. Client teams can still write their own queries before release, but planning across teams, or a backend for their screens, usually gives them the same control. A private API needs GraphQL only if its graph needs new operations faster than anyone could hand-write them, as Facebook's did.
+Most of what teams adopt GraphQL for is available without it. What's left is a client composing its own traversal of a graph the server can't predict. GraphQL's own best practices steer private APIs away from even that, by registering every query ahead of time. Client teams can still write their own queries before release, but planning across teams, or a backend for their screens, usually gives them the same control. That stops being true only when a product's screens take so many paths through its graph, and change them so often, that keeping an endpoint for each costs more than securing a query language. Facebook's did.
 
 ## Most of GraphQL's Benefits Aren't GraphQL's
 
@@ -192,7 +192,7 @@ Registration in CI keeps attackers' queries out, but not a teammate's costly one
 
 ### A Monorepo Makes the Registry Cheaper
 
-Gillam's write-up says the allowlist practice "has been used within Facebook since before GraphQL was open sourced." So Facebook did know its queries before they ran, but only because its client build generated the list, which no team could have written by hand.
+Gillam's write-up says the allowlist practice "has been used within Facebook since before GraphQL was open sourced." So Facebook did know its queries before they ran, but only because its client build generated the list rather than a team writing it.
 
 Facebook's code also lives largely in one repository, which Meta's post on its Sapling source control system puts at "tens of millions of files." Meta hasn't said its persisted queries depend on that, but I read them as benefiting from it. When client, compiler, and registry change in one commit, the hash is a detail of one build rather than a contract between two teams.
 
@@ -202,6 +202,6 @@ Where client and server ship from separate repositories, the registry becomes th
 
 Most teams adopting GraphQL don't have a graph nobody can predict. Their screens follow known paths, and designed endpoints give them what they wanted from GraphQL. For those teams, the server should own each operation, and the teams should plan together instead of building around each other.
 
-GraphQL earns its place where nobody can predict the queries. That covers public graph APIs like GitHub's, agents whose tasks can't be listed in advance, graph databases, and graphs like Facebook's, which need new operations faster than anyone could hand-write them. Persisted queries fit only that last case. Anywhere else, a team that locks GraphQL down has already listed its queries and keeps a query language only to compose them at build time.
+GraphQL earns its place where nobody can predict the queries. That covers public graph APIs like GitHub's, agents whose tasks can't be listed in advance, graph databases, and graphs like Facebook's, whose screens take too many changing paths to keep an endpoint for each. Persisted queries fit only that last case. Anywhere else, a team that locks GraphQL down has already listed its queries and keeps a query language only to compose them at build time.
 
 None of this says you can't use GraphQL, or that trying it was a mistake. It says to prove you have Facebook's problem before you take on Facebook's solution.
